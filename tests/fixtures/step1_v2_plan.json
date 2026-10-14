@@ -1,0 +1,101 @@
+{
+  "schema_version": 2,
+  "plan_id": "plan-step1-frozen-template",
+  "created_at": "2026-10-05T01:51:09+0800",
+  "rules_version": "milestone5-document-subcategories-r1",
+  "downloads_dir": "<SOURCE>",
+  "target_root": "<SOURCE>/下载分类",
+  "category_selection": [
+    "安装包",
+    "文档资料",
+    "图片截图",
+    "音视频",
+    "压缩包",
+    "代码与数据",
+    "待确认"
+  ],
+  "recursive": false,
+  "scan_scope": [
+    ""
+  ],
+  "selected_scope": [
+    ""
+  ],
+  "counts": {
+    "included": 1,
+    "selected": 1,
+    "excluded": 0,
+    "sensitive_skipped": 0,
+    "top_level_entries": 1,
+    "nested_files": 0,
+    "scanned_dirs": 1
+  },
+  "category_totals": {
+    "counts": {
+      "安装包": 0,
+      "文档资料": 1,
+      "图片截图": 0,
+      "音视频": 0,
+      "压缩包": 0,
+      "代码与数据": 0,
+      "待确认": 0
+    },
+    "sizes": {
+      "安装包": 0,
+      "文档资料": 28,
+      "图片截图": 0,
+      "音视频": 0,
+      "压缩包": 0,
+      "代码与数据": 0,
+      "待确认": 0
+    }
+  },
+  "excluded": {
+    "疑似敏感项": {
+      "count": 0,
+      "names": null
+    },
+    "跳过原因": {},
+    "元数据读取失败": {
+      "count": 0,
+      "types": {}
+    }
+  },
+  "operations": [
+    {
+      "op_id": "op-0001",
+      "rel_path": "step1-fixture.pdf",
+      "source": "<SOURCE>/step1-fixture.pdf",
+      "dest": "<SOURCE>/下载分类/文档资料/PDF/step1-fixture.pdf",
+      "category": "文档资料",
+      "classification_basis": "扩展名 .pdf 命中「文档资料」规则",
+      "identity": {
+        "st_dev": 16777233,
+        "st_ino": 47230370,
+        "size_bytes": 28,
+        "mtime_ns": 1791136269335501362,
+        "mode_type": "regular"
+      },
+      "document_subcategory": "PDF"
+    }
+  ],
+  "plan_hash_alg": "sha256/canonical-json-v1",
+  "dir_identities": {
+    "downloads_dir": [
+      16777233,
+      47230366
+    ],
+    "target_root": null,
+    "source_dirs": {
+      "": [
+        16777233,
+        47230366
+      ]
+    },
+    "dest_dirs": {
+      "文档资料": null,
+      "文档资料/PDF": null
+    }
+  },
+  "plan_hash": "sha256:ba0e596032d7702c9d53015c5ad781f0f77986bcc1779eeefe1362ae3ad13a79"
+}

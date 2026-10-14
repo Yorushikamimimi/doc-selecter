@@ -1,0 +1,8 @@
+{
+  "downloads_dir": "/Users/<你的用户名>/Downloads",
+  "target_parent_name": "下载分类",
+  "state_dir": "~/Library/Application Support/doc-selecter",
+  "same_filesystem_only": true,
+  "on_name_conflict": "skip",
+  "move_primitive": "rename_excl"
+}

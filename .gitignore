@@ -1,0 +1,42 @@
+__pycache__/
+*.py[cod]
+config.json
+*.png
+
+# Local environment and generated files
+.DS_Store
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+
+# Credentials and runtime records never belong in Git
+.env
+.env.*
+credentials.json
+secrets.json
+*.pem
+*.key
+/.state/
+/state/
+/plans/
+/journals/
+/undos/
+/confirmations/
+/inventory.json
+/stats.json
+
+# Local macOS products; source/resource manifests stay in the project.
+/build/
+
+# Local evidence, caches and packaging outputs
+/artifacts/
+/records/
+/screenshots/
+*.app/
+*.dmg
+*.zip
+*.icns
+*.tmp
