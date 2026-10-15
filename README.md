@@ -1,6 +1,6 @@
 # 文件整理助手（doc-selecter）
 
-macOS 本地文件分类工具。选择文件夹、预览整理结果、确认移动，必要时撤销。应用使用 Python 3 + Tkinter 标准库；自包含候选App自带运行时，源码开发与打包另需构建环境。
+macOS 本地文件分类工具。选择文件夹、预览整理结果、确认移动，必要时撤销。应用使用 Python 3 + Tkinter 标准库；自包含App自带运行时，源码开发与打包另需构建环境。
 
 ## 功能
 
@@ -10,11 +10,15 @@ macOS 本地文件分类工具。选择文件夹、预览整理结果、确认�
 - 可选归档本批整理后变空的目录；另有独立的剩余项归档入口。
 - 当前会话内按逆序撤销多批操作。
 
-## 下载（待正式发布）
+## 下载 macOS App
 
-自包含候选版本为 **0.1.0 / Apple Silicon arm64**，用户无需另装Python。候选待主控独立核验，**当前没有正式Release或有效的二进制下载附件**；核验通过后将在 [GitHub Releases](https://github.com/Yorushikamimimi/doc-selecter/releases) 提供DMG和SHA256SUMS，再更新此处下载入口。
+**[下载 v0.1.0 DMG（Apple Silicon／arm64）](https://github.com/Yorushikamimimi/doc-selecter/releases/download/v0.1.0/doc-selecter-0.1.0-macos-arm64.dmg)** · [Release说明](https://github.com/Yorushikamimimi/doc-selecter/releases/tag/v0.1.0) · [SHA256SUMS](https://github.com/Yorushikamimimi/doc-selecter/releases/download/v0.1.0/SHA256SUMS)
 
-候选构建最低系统声明为macOS 11.0，实际只在macOS 27.0（26A428）arm64验证；未在其他macOS版本或另一台干净Mac验证，不称universal。只有本地ad-hoc签名，无Developer ID或公证；网络下载的Gatekeeper体验尚未验证，系统可能拦截，不应关闭全局保护或自动移除隔离属性。候选未安装，也未替换已有应用。
+这是首个**公开预览版**，App自带Python3.12.15与Tcl／Tk，使用者无需另装Python。打开DMG后可手动复制应用；若已有同名应用，请先核对版本，不要直接替换。首次启动须选择来源，建议先用人工文件夹体验预览、确认整理和撤销。
+
+仅提供Apple Silicon／arm64；最低系统构建声明macOS11.0，实际只在macOS27.0（26A428）验证，其他系统及另一台干净Mac未验证，不是universal。只有ad-hoc签名，无Developer ID／公证；网络下载后的Gatekeeper体验尚未验证，系统可能拦截。不要关闭全局保护或自动移除隔离属性。
+
+发布前主控独立后台449项通过，总642 ID、193项GUI未运行；另核对正式App搬迁启动、DMG复制启动及隐藏验证副本的人工文件整理／撤销。程序化证据不等于本人原生体验，新分发成品仍等待Tian验收。
 
 ## 从源码运行
 
@@ -54,15 +58,15 @@ build/runtime-0.1.0/venv/bin/python3 -B scripts/build_distributable.py \
 
 准备入口只在指定新目录下载／校验固定运行时，创建隔离venv并安装哈希锁定wheel，不修改全局Python。可通过`--archive`复用已下载的运行时，但仍核对SHA256。构建入口仅接受固定Python／构建依赖及arm64环境，显式复制22个当前模块和正式图标／许可资源进行冻结，不复制整个venv、项目树或home；旧测试、兼容夹具、config、凭证、状态和用户材料均不打包。PyInstaller收集必要标准库、扩展、Tcl/Tk脚本数据及动态库，不盲目剥除运行组件。
 
-输出包含`dist/文件整理助手.app`、`doc-selecter-0.1.0-macos-arm64.dmg`、`SHA256SUMS`、逐文件构建清单和**拟**Release说明；所有产物在Git忽略的build中。DMG只提供应用、Applications拖放入口及说明，不运行安装器或自动替换旧App。App从自身包定位运行时，不依赖源码目录、cwd、PATH或用户site；首次来源未选，正式状态仍在既有应用支持位置，验证时DOCSELECTER_TEST_ROOT优先。
+输出包含`dist/文件整理助手.app`、`doc-selecter-0.1.0-macos-arm64.dmg`、`SHA256SUMS`、逐文件构建清单和Release说明；所有产物在Git忽略的build中。DMG只提供应用、Applications拖放入口及说明，不运行安装器或自动替换旧App。App从自身包定位运行时，不依赖源码目录、cwd、PATH或用户site；首次来源未选，正式状态仍在既有应用支持位置，验证时DOCSELECTER_TEST_ROOT优先。
 
-可复核候选的架构、动态依赖、内部链接、资源权限及最低系统声明：
+可复核产物的架构、动态依赖、内部链接、资源权限及最低系统声明：
 
 ```bash
 python3 -B scripts/audit_macos_bundle.py "build/release/candidate-0.1.0/dist/文件整理助手.app"
 ```
 
-该审查只读候选包，接受已核对的包内链接和系统库，不把构建声明当成旧系统实测。App为PyInstaller本地ad-hoc签名且资源封印通过校验；没有Apple分发身份或公证。固定依赖／来源可追溯，但不同构建的压缩归档和签名可能不同，不承诺逐字节确定性；以每份候选的校验和为准。
+该审查只读App包，接受已核对的包内链接和系统库，不把构建声明当成旧系统实测。App为PyInstaller本地ad-hoc签名且资源封印通过校验；没有Apple分发身份或公证。固定依赖／来源可追溯，但不同构建的压缩归档和签名可能不同，不承诺逐字节确定性；以每份产物的校验和为准。
 
 许可及官方选型出处见 [packaging/THIRD_PARTY.md](packaging/THIRD_PARTY.md)：CPython PSF／历史许可、Tcl/Tk BSD式许可、标准库底层依赖许可随包保留；PyInstaller生成物例外允许按依赖许可分发。构建依赖仅用于构建，不整体复制为运行时。
 

@@ -2,14 +2,19 @@
 
 更新日期：2026-10-15。
 
-## 当前状态：自包含App／DMG独立核验通过，进入发布（2026-10-15）
+## 当前状态：v0.1.0公开预览版已发布，待Tian体验（2026-10-15）
 
-- 公开维护仓库doc-selecter，版本0.1.0公开预览版、仅Apple Silicon arm64。App自带CPython3.12.15／Tcl与Tk9.0.4，不需另装Python；原已安装本机依赖版未替换。
-- 主控最终独立后台449项failure/error/skip=0，总642 ID、193 GUI未运行；原625 ID和旧断言／37份兼容夹具保留。初始候选447通过与最终449结果分别记录，不能称642全套通过。
-- 主控从最终可执行归档直接提取并核对22当前模块及两入口字节码；148模块与隐藏验证副本等价。5 Mach-O arm64、12内部链接、文件hash／许可／严格签名验证通过；正式未插桩产物在无外部Python环境依赖、特殊路径、LaunchServices及DMG挂载复制后隐藏启动通过。验证副本三人工文件双取消、移动／撤销、身份字节／日志与不可变记录通过；1.5秒I/O关闭208.6ms，未操作已安装App、真实文件／状态／备份。
-- 最终材料位于忽略目录build/release/preview-0.1.0-release-text-144f，DMG SHA256为cecc6256ddbbebf19cc1e1511bf79e5081e8f36858c082413ca569e849b3ffa4。运行时两份固定哈希与官方Release元数据独立比对一致；来源及许可见packaging/THIRD_PARTY.md。主控原始证据本地保留，不作为公开附件。
-- 发布支持边界：最低系统构建声明11.0，实测只有macOS27.0（26A428）；无其他Mac／旧系统／网络Gatekeeper或新用户原生点击证明。ad-hoc及资源封印，无Developer ID／公证；不绕过系统安全设置。Tian对新DMG成品验收仍待进行，程序化通过不代表本人验收。
-- 本任务已授权公开项目commit／push及GitHub Release；主控此时开始保存与发布，下载入口仅在真实Release和附件核对后加入README。最终发布SHA、tag、下载与校验结果以Git及下方发布记录为准；不进入旧私有仓库或Vault的Git操作。
+- **下载**：[v0.1.0 Release](https://github.com/Yorushikamimimi/doc-selecter/releases/tag/v0.1.0)，提供arm64 DMG、SHA256SUMS、构建清单与说明。App自带CPython3.12.15／Tcl与Tk9.0.4，不需另装Python。未替换原已安装App；新的分发成品尚待本人体验，不能写为Tian验收通过。
+- **版本**：实现提交 `472551b29690f4f3d9d93b89dad296e95f163845` 已推送main，注释tag v0.1.0精确指向该提交，GitHub标记prerelease、非draft。README下载入口和本条发布记录随文档另行提交；实际最新HEAD以Git为准。公开维护仅在doc-selecter，不同步扩展旧private项目。
+- **独立验证**：主控最终后台449项failure/error/skip=0，总642 ID、193 GUI未运行；原625 ID、旧断言和37份兼容夹具保留。22当前模块与两入口直接核对实际冻结字节码，148模块与验证副本等价。5 Mach-O arm64、12内部链接、许可／签名／清单hash正常；无外部Python依赖的未插桩启动、搬迁、LaunchServices、DMG挂载复制启动通过。
+- **往返与生命周期**：独立本地钩子冻结副本三人工文件双取消、移动／撤销、原名位置／五身份／字节、日志healthy及计划／确认不可变通过。1.5秒I/O期间约208.6ms关闭、心跳21.1ms、后台自然结束。不是用户原生点击证明。未访问真实Downloads／状态／备份或操作用户安装App／窗口。
+- **发布核对**：Release四附件从GitHub重新下载，与本地主控验证最终材料逐字一致；SHA256SUMS及GitHub各附件digest匹配。DMG SHA256为cecc6256ddbbebf19cc1e1511bf79e5081e8f36858c082413ca569e849b3ffa4。最终材料在忽略目录build/release/preview-0.1.0-release-text-144f；原始主控证据本地保留，不随公开附件上传。
+- **支持边界**：仅Apple Silicon arm64，最低构建声明11.0、实测只有macOS27.0（26A428）；无其他Mac／旧系统／互联网下载隔离后的Gatekeeper或本人成品验收证明。ad-hoc及资源封印，无Developer ID／公证，不绕过系统安全设置；名称启发式、外部竞态及条件撤销限制继续保留。
+- **下一步**：Tian从Release查看新DMG并反馈；不会自动覆盖旧App或开始真实整理。后续修复按反馈明确范围，后台回归优先，未运行GUI清单继续单列。
+
+### 主控发布保存记录（2026-10-15）
+
+实现32个明确路径提交、正常推送与注释tag；不强推、不带私有历史、用户材料或本机配置。仓库保持Public／MIT，author／committer规定身份、无AI联署；远端最终身份核对与文档提交结果以Git为准。上游原样许可证含空白行格式告警，保留原文字节，没有修改许可来消除告警；自有源码／文档差异及语法检查通过。详细独立证据与失败诊断仅本地保存，临时路径可能失效，不能据历史记录宣称当前文件现场。Vault概况／周日志仅提炼正式发布及待本人验收状态，不提交Vault。
 
 ## 候选实施与验证历史（2026-10-15）
 
