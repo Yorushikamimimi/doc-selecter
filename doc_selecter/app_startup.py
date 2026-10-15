@@ -117,6 +117,32 @@ class AppInstance:
             os.close(self.fd); self.fd = None
 
 
+def _runtime_diagnostics(root) -> dict:
+    """Read loaded-runtime origins only; no source scanning or trust-baseline changes."""
+    import ctypes
+    import _tkinter
+    libraries = []
+    if sys.platform == 'darwin':
+        dyld = ctypes.CDLL('/usr/lib/libSystem.B.dylib')
+        count = dyld._dyld_image_count
+        count.restype = ctypes.c_uint32
+        name = dyld._dyld_get_image_name
+        name.argtypes = [ctypes.c_uint32]
+        name.restype = ctypes.c_char_p
+        libraries = [os.fsdecode(name(i)) for i in range(count()) if name(i)]
+    return {'frozen': bool(getattr(sys, 'frozen', False)),
+            'bundle_runtime': getattr(sys, '_MEIPASS', None),
+            'python_version': sys.version,
+            'isolated': sys.flags.isolated, 'ignore_environment': sys.flags.ignore_environment,
+            'no_user_site': sys.flags.no_user_site,
+            'tkinter_module': _tkinter.__file__,
+            'tcl_library': root.tk.call('info', 'library'),
+            'tk_library': root.tk.eval('set tk_library'),
+            'tcl_version': root.tk.call('info', 'patchlevel'),
+            'tk_version': root.tk.call('package', 'provide', 'Tk'),
+            'loaded_libraries': libraries}
+
+
 def app_main(argv=None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     diagnose = '--diagnose' in argv
@@ -151,14 +177,17 @@ def app_main(argv=None) -> int:
                             'auto_check': bool(app._watch_enabled_var.get()),
                             'settings': settings.as_public_dict(), 'package_file': __file__,
                             'loaded_package_files': {k: getattr(v, '__file__', None) for k, v in sys.modules.items() if k.startswith('doc_selecter')},
-                            'sys_path': sys.path, 'executable': sys.executable}
+                            'sys_path': sys.path, 'executable': sys.executable,
+                            'runtime': _runtime_diagnostics(root)}
                         print(json.dumps(report, ensure_ascii=False), flush=True)
                         app.on_close()
                     root.after(30, observed)
                 root.mainloop()
         return 0
     except Exception as exc:
-        message = '启动所需的 Python／Tk 或应用工作目录不可用，请检查本机运行环境。'
+        message = ('应用内置 Python／Tk 或工作目录不可用，请重新复制完整应用并查看诊断；无需另装 Python。'
+                   if getattr(sys, 'frozen', False) else
+                   '启动所需的 Python／Tk 或应用工作目录不可用，请检查本机运行环境。')
         path = _write_diagnostic(message + '\n' + traceback.format_exc())
         print(message + '\n' + str(exc), file=sys.stderr)
         if not diagnose:

@@ -1,0 +1,41 @@
+{
+  "python_version": "3.12.15",
+  "pbs_release": "20261013",
+  "target": "aarch64-apple-darwin",
+  "architecture": "arm64",
+  "deployment_target": "11.0",
+  "runtime": {
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261013/cpython-3.12.15%2B20261013-aarch64-apple-darwin-install_only_stripped.tar.gz",
+    "sha256": "9866e11cf2ae9caa1e671383786f248859a52dd8bfb702fb4c0dc2c65f1d36de"
+  },
+  "license_archive": {
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261013/cpython-3.12.15%2B20261013-aarch64-apple-darwin-pgo%2Blto-full.tar.zst",
+    "sha256": "8c7ac5f091c64111247e595c9fc8fecc38453e94a60323a3b66dbfca3c01414a"
+  },
+  "freezer": "PyInstaller",
+  "freezer_version": "6.22.3",
+  "hooks_version": "2026.8",
+  "release_version": "0.1.0",
+  "license_files": [
+    "LICENSE.PyInstaller.txt",
+    "LICENSE.bdb.txt",
+    "LICENSE.bzip2.txt",
+    "LICENSE.cpython.txt",
+    "LICENSE.expat.txt",
+    "LICENSE.libX11.txt",
+    "LICENSE.libXau.txt",
+    "LICENSE.libedit.txt",
+    "LICENSE.libffi.txt",
+    "LICENSE.liblzma.txt",
+    "LICENSE.libuuid.txt",
+    "LICENSE.libxcb.txt",
+    "LICENSE.mpdecimal.txt",
+    "LICENSE.ncurses.txt",
+    "LICENSE.openssl-1.1.txt",
+    "LICENSE.openssl-3.txt",
+    "LICENSE.sqlite.txt",
+    "LICENSE.tcl.txt",
+    "LICENSE.tix.txt",
+    "LICENSE.zlib.txt"
+  ]
+}
