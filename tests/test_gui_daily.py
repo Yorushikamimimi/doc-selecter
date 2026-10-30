@@ -74,7 +74,7 @@ class DailyGuiTests(SandboxTestCase):
         def walk(w):
             if w.winfo_toplevel() is not self.root:
                 return
-            if isinstance(w, gui.ttk.Label):
+            if isinstance(w, (gui.ttk.Label, gui.tk.Label)):
                 yield str(w['text'])
             for c in w.winfo_children():
                 yield from walk(c)
@@ -92,7 +92,7 @@ class DailyGuiTests(SandboxTestCase):
         self.assertEqual(app.settings_window.state(), 'withdrawn')
         self.assertFalse(app.hash_label.winfo_viewable())
         self.assertFalse(app.watch_text.winfo_viewable())
-        self.assertEqual(tuple(app.tree['displaycolumns']), ('rel', 'folder'))
+        self.assertEqual(tuple(app.tree['displaycolumns']), ('rel', 'size', 'folder'))
         self.assertIn('待整理 3', app.daily_status_label['text'])
         self.assertIn('下载分类', app.target_label['text'])
         self.assertFalse(app.problem_label['text'])
@@ -147,7 +147,7 @@ class DailyGuiTests(SandboxTestCase):
         self.assertIn('下载分类/文档资料/Chosen/other', [r[5] for r in rows])
         app.on_organize()
         asks = [m for k, m in self.dialog_calls if k == 'ask']
-        self.assertTrue(any('Chosen/deep' in m and 'Chosen/other' in m and '数量：3' in m for m in asks))
+        self.assertTrue(any('Chosen/deep' in m and 'Chosen/other' in m and '整理 3 个文件' in m for m in asks))
         app.on_undo()
         self.assert_restored(app.plan)
         self.assertEqual((lstat_identity(str(neighbor)), neighbor.read_bytes()), neighbor_before)
@@ -268,7 +268,7 @@ class DailyGuiTests(SandboxTestCase):
         app = self.preview()
         app.on_organize()
         self.assertIn('已整理 2', app.daily_status_label['text'])
-        self.assertIn('跳过 1', app.problem_label['text'])
+        self.assertIn('1 个同名文件已存在，没有覆盖', app.problem_label['text'])
         self.assertEqual(blocker.read_bytes(), b'ARTIFICIAL-CONFLICT')
         self.assertTrue((self.sandbox.downloads/'说明.md').exists())
         app.on_undo()

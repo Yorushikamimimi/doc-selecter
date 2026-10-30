@@ -53,7 +53,8 @@ class GuiTests(SandboxTestCase):
         gui_mod.messagebox.showinfo = lambda t, m, **k: calls.append(("info", str(m)))
         gui_mod.messagebox.showwarning = lambda t, m, **k: calls.append(("warn", str(m)))
         gui_mod.messagebox.showerror = lambda t, m, **k: calls.append(("error", str(m)))
-        gui_mod.messagebox.askokcancel = lambda t, m, **k: (calls.append(("ask", str(m))) or True)
+        # 短确认框把说明放在 detail 里，一并记录，安全文案检查不因此漏看。
+        gui_mod.messagebox.askokcancel = lambda t, m, **k: (calls.append(("ask", str(m) + "\n" + str(k.get("detail", "")))) or True)
         gui_mod.messagebox.askyesno = lambda t, m, **k: (calls.append(("ask", str(m))) or True)
         self.addCleanup(self._restore_dialogs)
         return calls
@@ -88,7 +89,7 @@ class GuiTests(SandboxTestCase):
         # 中文文案存在
         self.assertEqual(str(app.preview_button["text"]), "生成预览")
         self.assertEqual(str(app.execute_button["text"]), "执行移动")
-        self.assertEqual(str(app.undo_button["text"]), "撤销最近一次整理")
+        self.assertEqual(str(app.undo_button["text"]), "撤销上一次")
         self.assertEqual(str(app.organize_button["text"]), "确认整理")
         def walk(widget):
             yield widget
@@ -97,7 +98,7 @@ class GuiTests(SandboxTestCase):
 
         labels = [
             str(w["text"]) for w in walk(app.root)
-            if isinstance(w, gui_mod.ttk.Label)
+            if isinstance(w, (gui_mod.ttk.Label, gui_mod.tk.Label))
         ]
         self.assertTrue(
             any("不保证无条件完整还原" in text for text in labels),
@@ -161,7 +162,8 @@ class GuiTests(SandboxTestCase):
         self.assertEqual(str(app.undo_button["state"]), "normal")
 
         app.on_undo()
-        self.assertTrue(any("已还原" in m for k, m in calls if k == "info"), calls)
+        # 「撤销上一次」成功后不再弹提示框，结果写在结果条里。
+        self.assertIn("已还原 2 个文件到原位置", str(app.daily_status_label["text"]))
         self.assertExists(self.sandbox.downloads / "a.pdf")
         self.assertExists(self.sandbox.downloads / "b.zip")
 

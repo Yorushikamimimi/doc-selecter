@@ -108,7 +108,8 @@ class RemainingGuiTests(SandboxTestCase):
         self.assertIn('已归档 1 个文件、1 个空目录', self.app.daily_status_label['text'])
         self.assertEqual(str(self.app.organize_button['state']), 'disabled')
         self.app.undo_button.invoke(); self.restored(p)
-        self.assertIn('已退回 V0', self.app.daily_status_label['text'])
+        self.assertIn('已还原 1 个文件、1 个原目录到原位置', self.app.daily_status_label['text'])
+        self.assertNotIn('V0', self.app.daily_status_label['text'])
 
     def test_directory_only_confirm_undo_cancel_then_undo(self):
         self.sandbox.add_dir('empty'); d = self.open(); p = self.preview(d)
@@ -233,7 +234,7 @@ class RemainingGuiTests(SandboxTestCase):
         app = self.build(); app.root.geometry('900x720'); d = self.open(); d.window.geometry('760x620')
         app.root.update(); d.window.update()
         for w, window in [(app.remaining_button, app.root), (app.source_button, app.root),
-                          (app.preview_button, app.root), (d.all_button, d.window),
+                          (app.primary_button, app.root), (d.all_button, d.window),
                           (d.preview_button, d.window), (d.close_button, d.window)]:
             self.assertTrue(w.winfo_ismapped())
             self.assertGreaterEqual(w.winfo_rooty(), window.winfo_rooty())
@@ -255,7 +256,7 @@ class RemainingGuiTests(SandboxTestCase):
             return original(settings, pid, hash_value, hook=hook, **kw)
         with patch('doc_selecter.gui_remaining.execute_plan', side_effect=collided): d.confirm_button.invoke()
         self.assertIn('未全部完成', d.status['text']); self.assertEqual(self.app.session.active[-1].moved, 1)
-        self.assertIn('跳过 1', self.app.problem_label['text'])
+        self.assertIn('1 个同名文件已存在，没有覆盖', self.app.problem_label['text'])
         self.app.undo_button.invoke()
         self.assertExists(p['operations'][0]['source']); self.assertExists(p['operations'][1]['source'])
 

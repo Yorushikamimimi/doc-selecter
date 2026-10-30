@@ -105,10 +105,9 @@ class VisibleWindowTests(SandboxTestCase):
         self.assertFalse(app.execute_button.winfo_viewable())
         # 主要控件都已完成布局（真实几何，不是 1x1 占位）
         for name, widget in (
-            ("生成预览", app.preview_button),
-            ("确认整理", app.organize_button),
+            ("生成预览", app.primary_button),
             ("撤销上一次执行", app.undo_button),
-            ("明细表", app.tree),
+            ("未预览说明", app.empty_frame),
         ):
             self.assertGreater(widget.winfo_width(), 1, f"{name} 未完成布局")
             self.assertTrue(widget.winfo_ismapped(), f"{name} 未映射到窗口")
@@ -119,7 +118,7 @@ class VisibleWindowTests(SandboxTestCase):
         for widget in (app.confirm_button, app.execute_button):
             self.assertTrue(widget.winfo_viewable())
             self.assertGreater(widget.winfo_width(), 1)
-        labels = [str(w["text"]) for w in _walk(self.root) if isinstance(w, gui_mod.ttk.Label)]
+        labels = [str(w["text"]) for w in _walk(self.root) if isinstance(w, (gui_mod.ttk.Label, gui_mod.tk.Label))]
         self.assertTrue(any("不保证无条件完整还原" in t for t in labels))
         self.assertTrue(any("只读扫描" in t for t in labels))
 

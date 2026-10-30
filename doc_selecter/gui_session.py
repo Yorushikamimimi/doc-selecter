@@ -8,6 +8,15 @@ from .locking import read_plan_state
 from .snapshot import fold_verified_journals, read_snapshot
 
 
+def latest_restorable_plan(candidates):
+    """Newest-first (plan, history) pairs: restore consumed history, never a preview.
+
+    Pure selection only. Callers supply the existing _read_plan_history result;
+    neither this function nor a restored display grants execution permission.
+    """
+    return next((plan for plan, history in candidates if history.get('consumed')), None)
+
+
 @dataclass
 class Step:
     version: int

@@ -71,8 +71,9 @@ class GuiLayoutTests(SandboxTestCase):
                     root.geometry(size + '+3000+3000')
                     root.update_idletasks()
                     root.update()
-                    groups = [(root, ('tree', 'preview_button', 'organize_button', 'undo_button',
-                                      'scope_label', 'daily_status_label'))]
+                    content = 'empty_frame' if stage in ('initial', 'undone') else 'tree'
+                    groups = [(root, (content, 'primary_button', 'undo_button',
+                                      'scope_label', 'footer_hint_label'))]
                     if app.watch_results.winfo_viewable():
                         groups.append((root, ('watch_text',)))
                     # 原详情/设置控件仍接受相同的逐层裁切断言，只移入各自入口。
@@ -106,7 +107,7 @@ class GuiLayoutTests(SandboxTestCase):
                     in_bounds(app.details_window, ('confirm_button', 'execute_button'))
                     app.details_window.withdraw()
                     app.settings_window.withdraw()
-                    self.assertGreaterEqual(app.tree.winfo_height(), 50,
+                    self.assertGreaterEqual(getattr(app, content).winfo_height(), 50,
                                             '保留可核对文件明细的空间，不能只显示操作按钮')
 
         visible('initial')

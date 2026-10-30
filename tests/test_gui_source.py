@@ -218,19 +218,25 @@ class SourceGuiTests(SandboxTestCase):
         self.root.geometry('900x720+3000+3000')
         self.root.deiconify()
         self.root.update()
-        for name in ('source_label', 'scope_label', 'source_hint_label', 'target_label',
-                     'tree', 'preview_button', 'organize_button', 'undo_button', 'daily_status_label'):
-            widget = getattr(app, name)
-            self.assertTrue(widget.winfo_viewable(), name)
-            self.assertGreater(widget.winfo_height(), 18, name)
-            current = widget
-            while current is not self.root:
-                parent = current.master
-                x = current.winfo_rootx() - parent.winfo_rootx()
-                y = current.winfo_rooty() - parent.winfo_rooty()
-                self.assertGreaterEqual(x, 0, name)
-                self.assertGreaterEqual(y, 0, name)
-                self.assertLessEqual(x + current.winfo_width(), parent.winfo_width(), name)
-                self.assertLessEqual(y + current.winfo_height(), parent.winfo_height(), name)
-                current = parent
-        self.assertGreaterEqual(app.tree.winfo_height(), 50)
+        app.on_toggle_details()
+        app.details_window.geometry('900x720+3000+3000')
+        self.root.update()
+        groups = ((self.root, ('folder_name_label', 'scope_label', 'empty_frame',
+                              'primary_button', 'undo_button', 'footer_hint_label')),
+                  (app.details_window, ('source_label', 'source_hint_label', 'target_label')))
+        for owner, names in groups:
+            for name in names:
+                widget = getattr(app, name)
+                self.assertTrue(widget.winfo_viewable(), name)
+                self.assertGreater(widget.winfo_height(), 18, name)
+                current = widget
+                while current is not owner:
+                    parent = current.master
+                    x = current.winfo_rootx() - parent.winfo_rootx()
+                    y = current.winfo_rooty() - parent.winfo_rooty()
+                    self.assertGreaterEqual(x, 0, name)
+                    self.assertGreaterEqual(y, 0, name)
+                    self.assertLessEqual(x + current.winfo_width(), parent.winfo_width(), name)
+                    self.assertLessEqual(y + current.winfo_height(), parent.winfo_height(), name)
+                    current = parent
+        self.assertGreaterEqual(app.empty_frame.winfo_height(), 50)

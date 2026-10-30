@@ -14,6 +14,8 @@ import os
 import copy
 import queue
 import threading
+import subprocess
+import stat
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from typing import Any
@@ -33,17 +35,18 @@ from .planner import (
     write_confirmation,
     write_plan,
 )
-from .rules import CATEGORIES, redact_private_text
+from .rules import CATEGORIES, redact_private_text, document_subcategory, normalize_extension
 from .scanner import list_selectable_folders, normalize_scope
 from .plan_hash import normalize_path
 from .snapshot import fold_verified_journals, read_snapshot
 from .undo import UndoRefused, undo_plan
 from .watcher import DEFAULT_INTERVAL_SECONDS, NewFileWatcher
 from .gui_source import selected_settings
-from .gui_session import OperationSession
+from .gui_session import OperationSession, latest_restorable_plan
 
 WINDOW_TITLE = "文件整理助手"
 FOOTER_WARNING = "撤销仅在条件满足时生效，不保证无条件完整还原。"
+FOOTER_HINT = "确认前不会移动任何文件 · 同名文件不覆盖"
 
 STATE_IDLE = "未生成预览"
 STATE_PREVIEWED = "已预览（待确认）"
@@ -114,45 +117,78 @@ class App:
 
     # --- 界面构建 -----------------------------------------------------------
     def _build_header(self) -> None:
-        frame = ttk.Frame(self.root, padding=(12, 10, 12, 6))
-        frame.pack(fill="x")
-        ttk.Label(frame, text="整理文件", font=("", 14, "bold")).pack(side="left")
-        self.mode_label = ttk.Label(frame, text="人工沙盒" if self.settings.sandboxed else "本次打开",
-                                    foreground="#555555")
-        self.mode_label.pack(side="left", padx=10)
-        self.settings_button = ttk.Button(frame, text="设置", command=self.on_toggle_settings)
-        self.settings_button.pack(side="right")
-        self.details_button = ttk.Button(frame, text="查看详情", command=self.on_toggle_details)
-        self.details_button.pack(side="right", padx=8)
-        self.source_button = ttk.Button(frame, text="选择整理文件夹…", command=self.on_pick_source)
-        self.source_button.pack(side="right", padx=8)
-
-        # 来源只取本次可信配置，名称沿用展示脱敏；完整路径留在详情。
-        source_name = self._public(os.path.basename(os.path.normpath(self.settings.downloads_dir))
-                                   or os.path.normpath(self.settings.downloads_dir))
-        source_mode = "人工测试目录" if self.settings.sandboxed else "已配置目录"
-        self.source_label = ttk.Label(self.root,
-            text=f"整理位置：{source_name}（{source_mode}）", wraplength=850)
-        self.source_label.pack(fill="x", padx=12, pady=(0, 6))
-        self.source_label.configure(text="整理位置：尚未选择 · 请先选择整理文件夹")
-        scope = ttk.Frame(self.root, padding=(12, 0))
-        scope.pack(fill="x")
+        self._view_category = None
+        self._history_view = {"consumed": False}
+        self._tooltip = None
+        self._tooltip_job = None
+        style = ttk.Style(self.root)
+        # ttk 控件在 Aqua 下会用样式背景色铺满自身矩形；与所在区域同色才不出现灰底块。
+        for name, color in (("Side", "#f1f2f5"), ("SideSel", "#e4e4ea"), ("Main", "#ffffff"),
+                            ("Tool", "#f7f7f8"), ("Banner", "#e5f4ec")):
+            for widget in ("TFrame", "TLabel", "TButton", "TCheckbutton"):
+                style.configure(f"{name}.{widget}", background=color)
+        style.configure("Files.Treeview", rowheight=32, font=("", 12))
+        style.configure("Files.Treeview.Heading", font=("", 12, "bold"))
+        self.root.columnconfigure(1, weight=1)
+        self.root.rowconfigure(0, weight=1)
+        self.sidebar = tk.Frame(self.root, background="#f1f2f5", width=232, padx=12, pady=12)
+        self.sidebar.grid(row=0, column=0, sticky="nsew")
+        self.sidebar.grid_propagate(False)
+        self.sidebar.columnconfigure(0, weight=1)
+        self.sidebar.rowconfigure(4, weight=1)
+        source = tk.Frame(self.sidebar, padx=4, pady=4, background="#f1f2f5")
+        source.grid(row=0, column=0, sticky="ew", pady=(2, 8))
+        self.folder_name_label = tk.Label(source, text="尚未选择文件夹", background="#f1f2f5",
+                                          font=("", 14, "bold"), wraplength=190)
+        self.folder_name_label.pack(anchor="w")
+        self.scope_label = tk.Label(source, text="扫描范围：仅顶层", background="#f1f2f5",
+                                    foreground="#6e6e73", wraplength=190)
+        self.scope_label.pack(anchor="w", pady=4)
+        self.source_button = ttk.Button(source, text="更换…", command=self.on_pick_source, style="Side.TButton")
+        self.source_button.pack(anchor="w")
+        scope = tk.Frame(self.sidebar, background="#f1f2f5")
+        scope.grid(row=1, column=0, sticky="ew")
         self.subfolder_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(scope, text="包含子文件夹", variable=self.subfolder_var,
-                        command=self.on_toggle_subfolders).pack(side="left")
-        self.pick_button = ttk.Button(scope, text="选择子文件夹…", command=self.on_pick_folders,
-                                      state="disabled")
-        self.pick_button.pack(side="left", padx=8)
-        self.scope_label = ttk.Label(scope, text="扫描范围：仅顶层", wraplength=520)
-        self.scope_label.pack(side="left", fill="x", expand=True)
-        self.target_label = ttk.Label(self.root,
-            text=f"按类型整理到上述文件夹内的「{self._public(self.settings.target_parent_name)}」，保留子目录层级。",
-            foreground="#555555")
-        self.target_label.pack(fill="x", padx=12, pady=(8, 0))
-        self.source_hint_label = ttk.Label(self.root,
-            text="默认只预览上述文件夹的顶层文件；勾选后可选择子文件夹。预览只读扫描，不移动文件。",
-            foreground="#555555", wraplength=850)
-        self.source_hint_label.pack(fill="x", padx=12)
+        self.subfolder_check = ttk.Checkbutton(scope, text="包含子文件夹", variable=self.subfolder_var,
+                                               style="Side.TCheckbutton", command=self.on_toggle_subfolders)
+        self.subfolder_check.pack(anchor="w")
+        self.pick_button = ttk.Button(scope, text="选择子文件夹…", command=self.on_pick_folders, state="disabled",
+                                      style="Side.TButton")
+        self.pick_button.pack(anchor="w", pady=(4, 8))
+        self.category_title = tk.Label(self.sidebar, text="本次整理的类别", background="#f1f2f5", foreground="#7a7e87")
+        self.category_title.grid(row=2, column=0, sticky="w", pady=(10, 6))
+        self.overview_frame = tk.Frame(self.sidebar, background="#f1f2f5")
+        self.overview_frame.grid(row=3, column=0, sticky="ew")
+        # 只在确有跳过项时显示（见 _sync_category_rows）。
+        self.skip_button = ttk.Button(self.sidebar, text="跳过 0 项 · 看原因", command=self.on_show_skips,
+                                      style="Side.TButton")
+        self.main_frame = tk.Frame(self.root, background="#ffffff")
+        self.main_frame.grid(row=0, column=1, sticky="nsew")
+        self.main_frame.columnconfigure(0, weight=1)
+        self.main_frame.rowconfigure(2, weight=1)
+        frame = tk.Frame(self.main_frame, padx=16, pady=12, background="#f7f7f8")
+        frame.grid(row=0, column=0, sticky="ew")
+        self.toolbar_title = tk.Label(frame, text="整理文件", background="#f7f7f8", font=("", 15, "bold"))
+        self.toolbar_title.pack(side="left")
+        self.mode_label = tk.Label(frame, text="未预览", padx=8, pady=2, background="#ececf0", foreground="#6e6e73")
+        self.mode_label.pack(side="left", padx=10)
+        self.settings_button = ttk.Button(frame, text="设置", command=self.on_toggle_settings, style="Tool.TButton")
+        self.settings_button.pack(side="right")
+        self.operations_button = ttk.Button(frame, text="操作记录", command=self.on_toggle_operations,
+                                            style="Tool.TButton")
+        self.operations_button.pack(side="right", padx=6)
+        self.details_button = ttk.Button(frame, text="详情", command=self.on_toggle_details, style="Tool.TButton")
+        self.details_button.pack(side="right")
+        self.banner = tk.Frame(self.main_frame, background="#e8efff", padx=16, pady=10)
+        self.banner.columnconfigure(0, weight=1)
+        self.banner_heading = tk.Frame(self.banner, background="#e8efff")
+        self.banner_heading.grid(row=0, column=0, sticky="ew")
+        self.banner_title = tk.Label(self.banner_heading, font=("", 13, "bold"), wraplength=420, anchor="w", justify="left")
+        self.banner_title.pack(side="left", fill="x", expand=True)
+        self.finder_button = ttk.Button(self.banner_heading, text="在访达中打开", command=self.on_open_target,
+                                        style="Banner.TButton")
+        self.problem_label = tk.Label(self.banner, text="", wraplength=580, justify="left", anchor="w")
+        self.problem_label.grid(row=1, column=0, sticky="ew")
 
     def _aux_window(self, title: str) -> tk.Toplevel:
         window = tk.Toplevel(self.root)
@@ -164,34 +200,65 @@ class App:
         return window
 
     def _build_body(self) -> None:
-        body = ttk.Frame(self.root, padding=(12, 8))
+        body = tk.Frame(self.main_frame, background="#ffffff")
         self.body_frame = body
-        body.pack(fill="both", expand=True)
+        body.grid(row=2, column=0, sticky="nsew")
         body.columnconfigure(0, weight=1)
         body.rowconfigure(0, weight=1)
-        review = ttk.LabelFrame(body, text="文件预览 · 文件名 → 分类文件夹", padding=8)
+        review = tk.Frame(body, background="#ffffff")
+        self.review_frame = review
         review.grid(row=0, column=0, sticky="nsew")
         review.columnconfigure(0, weight=1)
         review.rowconfigure(0, weight=1)
-        # 前五列保留原明细契约，日常视图只显示相对路径和可理解的目标层级。
-        columns = ("rel", "source", "dest", "basis", "size", "folder")
-        self.tree = ttk.Treeview(review, columns=columns, displaycolumns=("rel", "folder"),
-                                 show="headings", height=10)
-        self.tree.heading("rel", text="文件名 / 相对路径")
-        self.tree.heading("folder", text="整理到")
-        for key in ("rel", "folder"):
-            self.tree.column(key, width=400, minwidth=220, anchor="w")
+        # Keep the original five detail values; presentation columns are appended.
+        columns = ("rel", "source", "dest", "basis", "size", "folder", "format", "result")
+        self.tree = ttk.Treeview(review, columns=columns, displaycolumns=("rel", "size", "folder"),
+                                 show="headings", height=10, style="Files.Treeview")
+        for key, title in (("rel", "文件"), ("size", "大小"), ("folder", "整理到"),
+                           ("format", "格式"), ("result", "结果")):
+            self.tree.heading(key, text=title, anchor="w")
+            self.tree.column(key, width=150, minwidth=50, anchor="w", stretch=False)
+        self.tree.tag_configure("skipped", background="#fff3dc", foreground="#9a5b00")
+        self.tree.tag_configure("even", background="#fafbfc")
         self.tree.grid(row=0, column=0, sticky="nsew")
         vertical = ttk.Scrollbar(review, orient="vertical", command=self.tree.yview)
         vertical.grid(row=0, column=1, sticky="ns")
         horizontal = ttk.Scrollbar(review, orient="horizontal", command=self.tree.xview)
         horizontal.grid(row=1, column=0, sticky="ew")
         self.tree.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
+        self.tree.bind("<Configure>", self._fit_file_columns)
+        self.tree.bind("<Motion>", self._file_hover)
+        self.tree.bind("<Leave>", self._hide_tooltip)
+        self.empty_frame = tk.Frame(body, background="#ffffff")
+        self.empty_frame.columnconfigure(0, weight=1)
+        self.empty_frame.rowconfigure(0, weight=1)
+        self.empty_frame.rowconfigure(2, weight=1)
+        center = tk.Frame(self.empty_frame, padx=20, pady=20, background="#ffffff")
+        center.grid(row=1, column=0)
+        self.empty_icon = tk.Canvas(center, width=52, height=44, background="#ffffff",
+                                    highlightthickness=0, borderwidth=0)
+        self.empty_icon.pack(pady=(0, 10))
+        self.empty_title = tk.Label(center, font=("", 17, "bold"), background="#ffffff", wraplength=420)
+        self.empty_title.pack(pady=6)
+        self.empty_description = tk.Label(center, background="#ffffff", foreground="#5d6068",
+                                           wraplength=380, justify="center")
+        self.empty_description.pack(pady=(0, 16))
+        self.empty_action = ttk.Button(center, text="选择文件夹…", command=self.on_pick_source, default="active",
+                                       style="Main.TButton")
+        self.empty_action.pack()
 
         self.details_window = self._aux_window("整理详情")
         self.details_window.protocol("WM_DELETE_WINDOW", self.on_toggle_details)
         info = ttk.Frame(self.details_window, padding=12)
         info.pack(fill="x")
+        self.source_label = ttk.Label(info, text="整理位置：尚未选择 · 请先选择整理文件夹", wraplength=850)
+        self.source_label.pack(anchor="w")
+        self.target_label = ttk.Label(info,
+            text=f"按类型整理到上述文件夹内的「{self._public(self.settings.target_parent_name)}」，保留子目录层级。", wraplength=850)
+        self.target_label.pack(anchor="w")
+        self.source_hint_label = ttk.Label(info,
+            text="默认只预览上述文件夹的顶层文件；勾选后可选择子文件夹。预览只读扫描，不移动文件。", wraplength=850)
+        self.source_hint_label.pack(anchor="w")
         self.path_label = ttk.Label(info, text=f"下载目录：{self._public(self.settings.downloads_dir)}",
                                     wraplength=850)
         self.path_label.pack(anchor="w")
@@ -249,13 +316,11 @@ class App:
 
         self.settings_window = self._aux_window("整理设置")
         self.settings_window.protocol("WM_DELETE_WINDOW", self.on_toggle_settings)
-        self.overview_frame = ttk.LabelFrame(self.settings_window, text="本次整理的类别", padding=12)
-        self.overview_frame.pack(fill="x", padx=12, pady=12)
         self.archive_check = ttk.Checkbutton(self.settings_window,
             text="归档本次整理后变空的文件夹", variable=self.archive_var, command=self.on_toggle_archive)
         self.archive_check.pack(anchor="w", padx=12, pady=(0, 12))
-        self.archive_label = ttk.Label(body, text="", wraplength=780)
-        self.archive_label.grid(row=1, column=0, sticky="w")
+        self.archive_label = ttk.Label(info, text="", wraplength=780)
+        self.archive_label.pack(anchor="w")
         directory_tab = ttk.Frame(notebook, padding=8)
         notebook.add(directory_tab, text="条件目录归档")
         self.directory_text = tk.Text(directory_tab, state="disabled", wrap="word")
@@ -276,37 +341,39 @@ class App:
         self._render_categories(CATEGORIES, {}, {})
 
     def _build_footer(self) -> None:
-        footer = ttk.Frame(self.root, padding=(12, 6, 12, 12))
-        footer.pack(side="bottom", fill="x", before=self.body_frame)
-        self.daily_status_label = ttk.Label(footer, text="先生成预览，看看哪些文件可以整理。",
-                                            font=("", 12, "bold"), wraplength=850)
-        self.daily_status_label.pack(anchor="w")
-        self.problem_label = ttk.Label(footer, text="", foreground="#a00000", wraplength=850,
-                                       justify="left")
-        self.problem_label.pack(fill="x")
-        buttons = ttk.Frame(footer)
-        buttons.pack(fill="x", pady=8)
-        self.preview_button = ttk.Button(buttons, text="生成预览", command=self.on_preview)
-        self.preview_button.pack(side="left")
-        self.organize_button = ttk.Button(buttons, text="确认整理", command=self.on_organize, state="disabled")
-        self.organize_button.pack(side="left", padx=8)
-        self.undo_button = ttk.Button(buttons, text="撤销", command=self.on_undo, state="disabled")
-        self.undo_button.pack(side="left")
-        self.undo_button.configure(text="撤销最近一次整理")
-        self.operations_button = ttk.Button(buttons, text="操作记录", command=self.on_toggle_operations)
-        self.operations_button.pack(side="left", padx=8)
-        self.remaining_button = ttk.Button(buttons, text="归档剩余项目…", command=self.on_remaining_archive)
-        self.remaining_button.pack(side="left")
-        self.remaining_label = ttk.Label(footer, text="", foreground="#555555", wraplength=850)
-        self.remaining_label.pack(fill="x")
-        ttk.Label(footer, text="整理后可尝试撤销。", foreground="#555555").pack(anchor="w")
-        self.watch_results = ttk.LabelFrame(footer, text="新文件提示 · 请重新生成预览", padding=6)
-        self.watch_text = tk.Text(self.watch_results, height=3, wrap="word", state="disabled")
+        footer = tk.Frame(self.main_frame, padx=16, pady=10, background="#f7f7f8")
+        self.footer_frame = footer
+        footer.grid(row=3, column=0, sticky="ew")
+        footer.columnconfigure(0, weight=1)
+        # 状态文字仍由 daily_status_label 维护，由顶部结果条展示；底栏只放固定安全提示。
+        self.daily_status_label = tk.Label(footer, text="先生成预览，看看哪些文件可以整理。",
+                                            background="#f7f7f8", wraplength=210)
+        self.footer_hint_label = tk.Label(footer, text=FOOTER_HINT, background="#f7f7f8",
+                                          foreground="#6e6e73", anchor="w")
+        self.footer_hint_label.grid(row=0, column=0, sticky="w", padx=(0, 8))
+        buttons = tk.Frame(footer, background="#f7f7f8")
+        buttons.grid(row=0, column=1, sticky="e")
+        self.undo_button = ttk.Button(buttons, text="撤销上一次", command=self.on_undo, state="disabled",
+                                      style="Tool.TButton")
+        self.undo_button.pack(side="left", padx=(0, 6))
+        self.remaining_button = ttk.Button(buttons, text="归档剩余项目…", command=self.on_remaining_archive,
+                                           style="Tool.TButton")
+        self.remaining_button.pack(side="left", padx=(0, 6))
+        # Both original callbacks retain their own enabled state; only one is shown.
+        self.preview_button = ttk.Button(buttons, text="生成预览", command=self.on_preview, default="active",
+                                         style="Tool.TButton")
+        self.organize_button = ttk.Button(buttons, text="确认整理", command=self.on_organize,
+                                          state="disabled", default="active", style="Tool.TButton")
+        self.remaining_label = ttk.Label(self.details_window, text="", wraplength=780)
+        self.remaining_label.pack(fill="x", padx=12)
+        self.watch_results = tk.Frame(self.banner, background="#e8efff")
+        self.watch_text = tk.Text(self.watch_results, height=3, wrap="word", state="disabled",
+                                   borderwidth=0, highlightthickness=0, font=("", 12))
         self.watch_scroll = ttk.Scrollbar(self.watch_results, orient="vertical", command=self.watch_text.yview)
         self.watch_text.configure(yscrollcommand=self.watch_scroll.set)
         self.watch_scroll.pack(side="right", fill="y")
         self.watch_text.pack(side="left", fill="both", expand=True)
-        self.watch_more_button = ttk.Button(footer, text="查看更多新文件提示", command=self.on_more_discovery)
+        self.watch_more_button = ttk.Button(self.banner, text="查看更多新文件提示", command=self.on_more_discovery)
         self._preview_problem = ""
         self._state_problem = ""
         self._discovery_problem = ""
@@ -315,11 +382,13 @@ class App:
 
     def _fit_daily_labels(self, event) -> None:
         if event.widget is self.root:
-            width = max(300, event.width - 50)
-            for label in (self.source_label, self.source_hint_label, self.target_label,
-                          self.daily_status_label, self.problem_label, self.remaining_label):
-                label.configure(wraplength=width)
-            self.scope_label.configure(wraplength=max(180, event.width - 420))
+            width = max(240, event.width - 280)
+            self.problem_label.configure(wraplength=width)
+            self.banner_title.configure(wraplength=max(160, width - 150))
+            self.empty_title.configure(wraplength=min(420, width - 40))
+            self.empty_description.configure(wraplength=min(380, width - 40))
+            self.daily_status_label.configure(wraplength=max(120, width - 430))
+            self.footer_hint_label.configure(wraplength=max(120, width - 430))
 
     def on_toggle_details(self) -> None:
         if self.details_window.state() == "withdrawn":
@@ -344,8 +413,9 @@ class App:
         if self._operation_busy or self._closing:
             return
         chosen = filedialog.askdirectory(parent=self.root, title='选择整理文件夹', mustexist=True)
-        if chosen:
-            self.select_source(chosen)
+        # 预览只读：从选择框选好且没有可恢复的整理记录时，直接生成预览。
+        if chosen and self.select_source(chosen) and self.plan is None:
+            self.on_preview()
 
     def select_source(self, path: str) -> bool:
         """文件选择对话框和测试共用的真实准入路径；失败不改变任何当前状态。"""
@@ -370,6 +440,7 @@ class App:
             self._remaining_dialog.invalidate_context()
         self._chain_result = None
         self._source_selected = True
+        self._view_category = None
         self.selected_scope = []
         self.include_subfolders = False
         self.subfolder_var.set(False)
@@ -534,7 +605,8 @@ class App:
             self._operation_busy = False
             self._refresh_plan_buttons()
 
-    def on_return_to(self, version: int) -> None:
+    def on_return_to(self, version: int, simple: bool = False) -> None:
+        """simple=True 来自「撤销上一次」：短确认框、成功后不弹提示；操作记录窗口保留完整明细。"""
         if self._operation_busy:
             return
         try:
@@ -551,17 +623,29 @@ class App:
         self._invalidate_discovery()
         self._refresh_plan_buttons()
         try:
-            if not messagebox.askokcancel('确认退回操作', f'将按以下顺序撤销，退回 V{version}：\n\n{summary}\n\n'
+            moved = sum(s.moved for s in batches)
+            pending = sum(s.uncertain for s in batches)
+            if simple:
+                asked = messagebox.askokcancel('确认撤销', '撤销上一次整理？', detail=(
+                    f'{moved} 个文件' + (f'、{sum(s.archived_dirs for s in batches)} 个原目录' if any(s.archived_dirs for s in batches) else '')
+                    + '会放回原来的位置。' + (f'另有 {pending} 项需要先核对。' if pending else '') +
+                    '\n之后新放进来的文件不受影响；如果某个文件已被改动，会停下来提示你。'))
+            else:
+                asked = messagebox.askokcancel('确认退回操作', f'将按以下顺序撤销，{"把文件放回本次整理前的位置" if version == 0 else f"退回 V{version}"}：\n\n{summary}\n\n'
                     f'预计最多还原 {sum(s.moved for s in batches)} 个已知移动文件；另有 {sum(s.uncertain for s in batches)} 项待判定。\n'
                     f'原目录 {sum(s.archived_dirs for s in batches)} 个；目录待判定 {sum(s.uncertain_dirs for s in batches)} 项。\n'
-                    '不会删除外部新增文件或覆盖外部修改。某批未完整还原就停止。\n'+FOOTER_WARNING):
+                    '不会删除外部新增文件或覆盖外部修改。某批未完整还原就停止。\n'+FOOTER_WARNING)
+            if not asked:
                 return
             report = self.session.return_to(version, undo_plan)
             self._chain_result = report
             self._refresh_plan_buttons()
             if report.reached:
                 self._chain_problem = ""
-                messagebox.showinfo(WINDOW_TITLE, f'已退回 V{version}；本次已还原 {report.restored} 个文件、{report.restored_dirs} 个原目录。')
+                dirs = f'、{report.restored_dirs} 个原目录' if report.restored_dirs else ''
+                if not simple:
+                    messagebox.showinfo(WINDOW_TITLE, f'已还原 {report.restored} 个文件{dirs}到原位置。'
+                                        + (f'（已退回 V{version}）' if version else ''))
             else:
                 stopped = next(s for s in self.session.steps if s.version == report.stopped_at)
                 source = redact_private_text(stopped.settings.downloads_dir,
@@ -581,15 +665,283 @@ class App:
     def _render_categories(self, selected, counts, sizes) -> None:
         for child in self.overview_frame.winfo_children():
             child.destroy()
-        self._selection_vars = {}
-        for category in CATEGORIES:
-            var = tk.BooleanVar(value=category in selected)
-            self._selection_vars[category] = var
-            row = ttk.Frame(self.overview_frame)
-            row.pack(fill="x")
-            ttk.Checkbutton(row, text=category, variable=var,
-                            command=self.on_toggle_category).pack(side="left")
-            ttk.Label(row, text=f"{counts.get(category, 0)} 个 · {human_size(int(sizes.get(category, 0)))}").pack(side="right")
+        self._selection_vars = {c: tk.BooleanVar(value=c in selected) for c in CATEGORIES}
+        self._category_counts = dict(counts)
+        self._category_widgets = {}
+        colors = {"图片截图": "#0f9d76", "文档资料": "#2563eb", "安装包": "#c2410c",
+                  "压缩包": "#a16207", "音视频": "#7c3aed", "代码与数据": "#0e7490", "待确认": "#6b7280"}
+        for category in (None, *colors):
+            row = tk.Frame(self.overview_frame, background="#f1f2f5", padx=6, pady=5)
+            row.pack(fill="x", pady=1)
+            check = None
+            if category:
+                check = ttk.Checkbutton(row, variable=self._selection_vars[category],
+                                        command=self.on_toggle_category, style="Side.TCheckbutton")
+                check.pack(side="left")
+            dot = tk.Label(row, text="●", fg=colors.get(category, "#1c1d21"), bg="#f1f2f5", font=("", 10))
+            dot.pack(side="left", padx=(0, 5))
+            label = tk.Label(row, text=category or "全部", bg="#f1f2f5", anchor="w", font=("", 12))
+            label.pack(side="left", fill="x", expand=True)
+            count = tk.Label(row, text="", bg="#f1f2f5", fg="#6e6e73", font=("", 12))
+            count.pack(side="right")
+            for widget in (row, dot, label, count):
+                widget.bind("<Button-1>", lambda event, c=category: self.on_filter_category(c))
+            self._category_widgets[category] = (row, check, dot, label, count)
+
+    def on_filter_category(self, category) -> None:
+        """Viewing one category never changes selection, confirmation or the plan."""
+        if self._closing or self._operation_busy:
+            return
+        self._view_category = category
+        self._sync_daily_view(self._history_view, self._plan_matches_current())
+
+    def on_show_skips(self) -> None:
+        if self.details_window.state() == "withdrawn":
+            self.on_toggle_details()
+        self.detail_notebook.select(1)
+
+    def _sync_category_rows(self, history, undone) -> None:
+        consumed = history.get("consumed", False) and not undone
+        self.category_title.configure(text="这次整理的结果" if consumed else "本次整理的类别")
+        operations = (self.plan or {}).get("operations", [])
+        execution = history.get("execution", {})
+        for category, (row, check, dot, label, count) in self._category_widgets.items():
+            chosen = category == self._view_category
+            color = "#e4e4ea" if chosen else "#f1f2f5"
+            row.configure(background=color)
+            for widget in (dot, label, count):
+                widget.configure(background=color)
+            if check:
+                check.configure(style="SideSel.TCheckbutton" if chosen else "Side.TCheckbutton")
+            if check:
+                if consumed:
+                    check.pack_forget()
+                else:
+                    check.pack(side="left", before=dot)
+                    check.configure(state="normal" if self._source_selected and not self._operation_busy else "disabled")
+            selected = category is None or self._selection_vars[category].get()
+            label.configure(foreground="#1c1d21" if self._source_selected and (selected or consumed) else "#9a9da5")
+            if consumed:
+                ops = [op for op in operations if category is None or op.get("category") == category]
+                outcomes = [(execution.get(op["op_id"], {}).get("result") or {}).get("outcome") for op in ops]
+                moved, skipped = outcomes.count("moved"), outcomes.count("skipped")
+                text = str(moved) + (f" +{skipped}" if skipped else "")
+                if len(outcomes) > moved + skipped:
+                    text += f" · 待查 {len(outcomes) - moved - skipped}"
+                count.configure(text=text, foreground="#9a5b00" if skipped else "#5d6068")
+            elif not self.plan or undone:
+                count.configure(text="")
+            elif category is None:
+                count.configure(text=f"{len(operations)} / {sum(self._category_counts.values())}", foreground="#5d6068")
+            else:
+                count.configure(text=str(self._category_counts.get(category, 0)), foreground="#5d6068")
+        excluded = (self.plan or {}).get("excluded", {})
+        skipped = sum(value.get("count", 0) if isinstance(value, dict) else len(value)
+                      for key, value in excluded.items() if key not in {"跳过原因", "未归档原因数量"})
+        if self.plan and skipped:
+            done = consumed and not undone
+            self.skip_button.configure(text=f"{skipped} 个{'已跳过' if done else '会跳过'} · 看原因", state="normal")
+            self.skip_button.grid(row=5, column=0, sticky="ew", pady=8)
+        else:
+            self.skip_button.configure(text="跳过 0 项 · 看原因", state="disabled")
+            self.skip_button.grid_remove()
+
+    def _draw_empty_icon(self, kind: str) -> None:
+        """空状态的线框图标：folder（选文件夹／生成预览）或 undo（撤销之后）。"""
+        canvas = self.empty_icon
+        canvas.delete("all")
+        line = dict(fill="#a1a1a6", width=2, capstyle="round", joinstyle="round")
+        if kind == "undo":
+            canvas.create_line(18, 8, 8, 18, 18, 28, **line)
+            canvas.create_line(8, 18, 32, 18, **line)
+            canvas.create_arc(20, 18, 44, 40, start=270, extent=180, style="arc", outline="#a1a1a6", width=2)
+            canvas.create_line(32, 40, 26, 40, **line)
+        else:
+            canvas.create_line(4, 10, 4, 38, 48, 38, 48, 14, 24, 14, 20, 8, 6, 8, 4, 10, **line)
+
+    def _sync_daily_view(self, history, current_plan) -> None:
+        if not hasattr(self, "preview_button") or self._closing:
+            return
+        self._history_view = history
+        status = str(self.status_label["text"])
+        undone = (status.startswith("状态：" + STATE_UNDONE)
+                  or bool(self._chain_result and self._chain_result.reached))
+        consumed = history.get("consumed", False)
+        name = self._public(os.path.basename(self.settings.downloads_dir)) if self._source_selected else "尚未选择文件夹"
+        self.folder_name_label.configure(text=name[:32] + ("…" if len(name) > 32 else ""))
+        self.subfolder_check.configure(state="normal" if self._source_selected and not self._operation_busy else "disabled")
+        if self._source_selected:
+            self.source_button.pack(anchor="w")
+        else:
+            self.source_button.pack_forget()
+        show_empty = not self._source_selected or self.plan is None or undone
+        self._sync_category_rows(history, undone)
+        self._render_file_view(history)
+        self.preview_button.pack_forget()
+        self.organize_button.pack_forget()
+        if show_empty:
+            self.review_frame.grid_remove()
+            self.empty_frame.grid(row=0, column=0, sticky="nsew")
+            if not self._source_selected:
+                title = "先选择要整理的文件夹"
+                explanation = "选好后会先生成只读预览，告诉你每个文件会被放到哪里。确认之前不会移动任何文件。"
+                text, command = "选择文件夹…", self.on_pick_source
+            else:
+                title = "需要的话，重新生成预览" if undone else "先生成预览，看看哪些文件可以整理"
+                explanation = (f"撤销后可调整类别，再为 {name} 生成一次预览。" if undone else
+                               "预览只读扫描，按文件名和类型分好类，不移动任何东西。")
+                text, command = "生成预览", self.on_preview
+            self._draw_empty_icon("undo" if undone else "folder")
+            self.empty_title.configure(text=title)
+            self.empty_description.configure(text=explanation)
+            self.empty_action.configure(text=text, command=command, state="disabled" if self._operation_busy else "normal")
+            self.primary_button = self.empty_action
+        else:
+            self.empty_frame.grid_remove()
+            self.review_frame.grid(row=0, column=0, sticky="nsew")
+            if current_plan:
+                self.organize_button.configure(text=f"确认整理 {len(self.plan.get('operations', []))} 个文件")
+                self.organize_button.pack(side="left")
+                self.primary_button = self.organize_button
+            else:
+                self.preview_button.configure(text="重新生成预览")
+                self.preview_button.pack(side="left")
+                self.primary_button = self.preview_button
+        if self._source_selected:
+            self.footer_frame.grid()
+        else:
+            self.footer_frame.grid_remove()
+        if show_empty:
+            self.toolbar_title.configure(text=name if self._source_selected else "整理文件")
+        else:
+            count = len(self.tree.get_children())
+            self.toolbar_title.configure(text=f"{self._view_category} · {count} 个" if self._view_category else "全部文件")
+        self.mode_label.configure(text="预览 · 只读" if current_plan else ("整理结果" if consumed and not undone else "未预览"),
+                                  background="#ececf0")
+        self._sync_banner()
+
+    def _sync_banner(self) -> None:
+        if not hasattr(self, "watch_text") or self._closing:
+            return
+        history = self._history_view
+        status = str(self.status_label["text"])
+        undone = status.startswith("状态：" + STATE_UNDONE) or bool(self._chain_result and self._chain_result.reached)
+        executed = history.get("phase") == "executed" and status in {f"状态：{STATE_EXECUTED}", "状态：已执行（无可撤销项）"}
+        watching = bool(self.watch_results.winfo_manager())
+        problem = str(self.problem_label["text"])
+        self.finder_button.pack_forget()
+        if executed:
+            self.finder_button.pack(side="right", padx=(8, 0))
+            self.finder_button.configure(state="normal" if self._target_can_open() and not self._operation_busy else "disabled")
+        if not (history.get("consumed") or problem or watching or self._chain_result):
+            self.banner.grid_remove()
+            return
+        counts = history.get("state", {}).get("counts") or {}
+        bad = bool(self._preview_problem or self._discovery_problem or getattr(self, '_chain_problem', '')
+                   or history.get('error') or (history.get('consumed') and not (executed or undone))
+                   or (problem and not (executed or undone))
+                   or (executed and any(counts.get(k, 0) for k in ('failed', 'not_attempted'))))
+        # 三种含义：琥珀＝有问题／跳过，灰＝普通提示（撤销、新文件），绿＝整理完成。
+        bg, fg = ("#fff3dc", "#9a5b00") if bad else (("#f1f1f4", "#3a3a3c") if undone or watching else ("#e5f4ec", "#16794c"))
+        self.banner.configure(background=bg)
+        style = ttk.Style(self.root)
+        style.configure("Banner.TFrame", background=bg)
+        style.configure("Banner.TButton", background=bg)
+        self.banner_heading.configure(background=bg)
+        self.watch_results.configure(background=bg)
+        title = "发现新文件 · 请重新生成预览" if watching and not bad else str(self.daily_status_label["text"])
+        self.banner_title.configure(text=title, background=bg, foreground=fg)
+        self.problem_label.configure(background=bg, foreground=fg)
+        self.watch_text.configure(background=bg, foreground=fg)
+        self.banner.grid(row=1, column=0, sticky="ew")
+
+    def _target_can_open(self) -> bool:
+        if not self._source_selected or self._history_view.get("phase") != "executed":
+            return False
+        try:
+            return stat.S_ISDIR(os.lstat(self.settings.target_root).st_mode)
+        except OSError:
+            return False
+
+    def on_open_target(self) -> None:
+        if self._closing or self._operation_busy or not self._target_can_open():
+            return
+        try:
+            subprocess.Popen(["/usr/bin/open", self.settings.target_root])
+        except OSError as exc:
+            messagebox.showerror(WINDOW_TITLE, self._public(exc))
+
+    def _render_file_view(self, history) -> None:
+        self._hide_tooltip()
+        selected = self.tree.selection()
+        y = self.tree.yview()
+        for row in self.tree.get_children():
+            self.tree.delete(row)
+        plan = public_plan_view(self.plan, self.settings) if self.plan else {}
+        operations = plan.get("operations", [])
+        if plan.get("plan_type") == "remaining_archive":
+            operations = operations + plan.get("directory_operations", [])
+        consumed = history.get("consumed", False)
+        columns = ["rel"] + (["format"] if self._view_category == "文档资料" else []) + ["size", "folder"]
+        if consumed:
+            columns.append("result")
+        self.tree.configure(displaycolumns=columns)
+        for op in operations:
+            if self._view_category and op.get("category") != self._view_category:
+                continue
+            event = (history.get("execution", {}).get(op["op_id"], {}).get("result") or {})
+            outcome = event.get("outcome")
+            result = {"moved": "已移动", "archived": "已归档", "skipped": "跳过", "failed": "失败"}.get(outcome, "待检查" if consumed else "")
+            if outcome == "skipped" and event.get("reason_code") == "DEST_EXISTS":
+                result = "跳过 · 同名文件已存在，未覆盖"
+            elif consumed and outcome not in {"moved", "archived"} and event.get("reason"):
+                result += " · " + self._public(event["reason"])
+            folder = os.path.dirname(os.path.relpath(op["dest"], self.settings.downloads_dir))
+            name = op.get("rel_path") or os.path.basename(op["source"])
+            values = (name, op["source"], op["dest"], op.get("classification_basis", "原本空目录"),
+                      human_size(int(op["identity"]["size_bytes"])) if "size_bytes" in op.get("identity", {}) else "—",
+                      folder, document_subcategory(normalize_extension(name)) or "—", result)
+            tags = ("skipped",) if consumed and outcome not in {"moved", "archived"} else (("even",) if len(self.tree.get_children()) % 2 else ())
+            self.tree.insert("", "end", iid=op["op_id"], values=values, tags=tags)
+        for row in selected:
+            if self.tree.exists(row):
+                self.tree.selection_add(row)
+        if y:
+            self.tree.yview_moveto(y[0])
+        self._fit_file_columns()
+
+    def _fit_file_columns(self, event=None) -> None:
+        width = max(300, self.tree.winfo_width() - 4)
+        columns = tuple(self.tree["displaycolumns"])
+        weights = {"rel": 40, "size": 12, "folder": 35, "format": 13, "result": 30}
+        total = sum(weights[c] for c in columns)
+        for col in columns:
+            self.tree.column(col, width=int(width * weights[col] / total), minwidth=30, stretch=False)
+
+    def _hide_tooltip(self, event=None) -> None:
+        if self._tooltip_job is not None:
+            self.root.after_cancel(self._tooltip_job)
+            self._tooltip_job = None
+        if self._tooltip is not None:
+            self._tooltip.destroy()
+            self._tooltip = None
+
+    def _file_hover(self, event) -> None:
+        self._hide_tooltip()
+        row = self.tree.identify_row(event.y)
+        if not row:
+            return
+        values = self.tree.item(row, "values")
+        def show():
+            self._tooltip_job = None
+            if self._closing or not self.tree.exists(row):
+                return
+            tip = self._tooltip = tk.Toplevel(self.root)
+            tip.overrideredirect(True)
+            tip.geometry(f"+{min(event.x_root + 12, self.root.winfo_screenwidth() - 500)}+{min(event.y_root + 18, self.root.winfo_screenheight() - 170)}")
+            text = values[0] + "\n整理到：" + values[5] + ("\n" + values[7] if len(values) > 7 and values[7] else "")
+            ttk.Label(tip, text=text, padding=10, wraplength=470, background="#fff9dc").pack()
+        self._tooltip_job = self.root.after(500, show)
 
     # --- 状态 ---------------------------------------------------------------
     def _set_status(self, state: str) -> None:
@@ -609,6 +961,8 @@ class App:
                 self._state_problem = "操作尚未全部完成，请查看详情；必要时使用恢复/检查。"
         self.daily_status_label.configure(text=text)
         self._show_daily_problems()
+        if hasattr(self, "empty_action"):
+            self._sync_daily_view(self._history_view, self._plan_matches_current())
 
     def _selected_categories(self) -> list[str]:
         chosen = [c for c in CATEGORIES if self._selection_vars.get(c) and self._selection_vars[c].get()]
@@ -684,18 +1038,19 @@ class App:
         self.confirmed_hash = None
         self._refresh_plan_buttons()
 
-    def _read_plan_history(self) -> dict[str, Any]:
+    def _read_plan_history(self, candidate=None) -> dict[str, Any]:
         """只读持久化记录；不能把旧确认指纹当成再次执行授权。"""
-        if self.plan is None:
+        plan = self.plan if candidate is None else candidate
+        if plan is None:
             return {"consumed": False}
-        plan_id = str(self.plan["plan_id"])
+        plan_id = str(plan["plan_id"])
         state = read_plan_state(self.settings, plan_id)
         snapshot = read_snapshot(self.settings, plan_id)
         error = False
         try:
-            if self.plan.get("schema_version") in (3, 4):
+            if plan.get("schema_version") in (3, 4):
                 from .directory_archive import read_folds
-                execution,undo=read_folds(self.settings,self.plan)
+                execution,undo=read_folds(self.settings,plan)
             else:
                 execution, undo = fold_verified_journals(self.settings.state_dir, plan_id)
         except (JournalCorrupted, JournalNeedsRepair, PlanError, KeyError, TypeError, ValueError, OSError):
@@ -830,8 +1185,18 @@ class App:
                     f"{sum((v.get('result') or {}).get('outcome') == 'archived' for v in history['execution'].values())} 个空目录"
                     if self.plan.get('plan_type') == 'remaining_archive' else f"已整理 {counts.get('moved', 0)} 个文件"))
             problems = []
-            if any(counts.get(k, 0) for k in ("skipped", "failed", "not_attempted")):
-                problems.append(f"上次整理：跳过 {counts.get('skipped', 0)}、失败 {counts.get('failed', 0)}、未处理 {counts.get('not_attempted', 0)} 个；请查看详情。")
+            undone_now = bool(self._chain_result and self._chain_result.reached)
+            if not undone_now and any(counts.get(k, 0) for k in ("skipped", "failed", "not_attempted")):
+                skipped = counts.get('skipped', 0)
+                if not any(counts.get(k, 0) for k in ("failed", "not_attempted")):
+                    reasons = [(slot.get("result") or {}).get("reason_code")
+                               for slot in history["execution"].values()
+                               if (slot.get("result") or {}).get("outcome") == "skipped"]
+                    problems.append(f"{skipped} 个同名文件已存在，没有覆盖，原文件留在原处。"
+                                    if reasons and all(r == "DEST_EXISTS" for r in reasons)
+                                    else f"跳过 {skipped} 个文件，原文件留在原处；原因见左下「看原因」。")
+                else:
+                    problems.append(f"上次整理：跳过 {skipped}、失败 {counts.get('failed', 0)}、未处理 {counts.get('not_attempted', 0)} 个；请查看详情。")
             if self.plan.get('plan_type') == 'remaining_archive':
                 if any(counts.get(k, 0) for k in ('dirs_skipped', 'dirs_failed', 'dirs_not_attempted')):
                     problems.append(f"剩余目录归档未全部完成：未满足 {counts.get('dirs_skipped', 0)}、"
@@ -849,9 +1214,13 @@ class App:
         self._show_daily_problems()
         if self._chain_result is not None:
             result = self._chain_result
-            prefix = '已还原' if result.reached else ('撤销失败／需检查 · 已还原' if result.exception else '部分撤销 · 已还原')
-            self.daily_status_label.configure(text=f'{prefix} {result.restored} 个文件、{result.restored_dirs} 个原目录'
-                + (f' · 已退回 V{result.target}' if result.reached else ' · 请查看提示'))
+            if result.reached:
+                dirs = f'、{result.restored_dirs} 个原目录' if result.restored_dirs else ''
+                text = f'已还原 {result.restored} 个文件{dirs}到原位置' + (f' · 已退回 V{result.target}' if result.target else '')
+            else:
+                prefix = '撤销失败／需检查 · 已还原' if result.exception else '部分撤销 · 已还原'
+                text = f'{prefix} {result.restored} 个文件、{result.restored_dirs} 个原目录 · 请查看提示'
+            self.daily_status_label.configure(text=text)
         if self.session.active:
             head = self.session.active[-1]
             phase = read_plan_state(head.settings, head.plan_id).get('phase')
@@ -878,6 +1247,8 @@ class App:
             self.pick_button.configure(state='normal' if self._source_selected and self.include_subfolders else 'disabled')
             self.step_recover_button.configure(state='normal')
             self._render_operations()
+        self._history_view = history
+        self._sync_daily_view(history, current_plan)
 
     def on_remaining_archive(self) -> None:
         if self._closing or self._operation_busy or not self._source_selected:
@@ -892,6 +1263,7 @@ class App:
     def _show_daily_problems(self) -> None:
         self.problem_label.configure(text="\n".join(filter(None, (self._preview_problem, self._state_problem,
             self._discovery_problem, getattr(self, '_chain_problem', '')))))
+        self._sync_banner()
 
     # --- 扫描范围 -----------------------------------------------------------
     def scope_summary(self) -> str:
@@ -1119,26 +1491,28 @@ class App:
         self._discovery_problem = "新文件检查覆盖不完整或出错，请查看详情并重新生成预览。" if errors else ""
         self._show_daily_problems()
         if names or errors or "检查中" in text:
-            self.watch_results.pack(fill="x", pady=(6, 0))
+            self.watch_results.grid(row=2, column=0, sticky="ew", pady=(6, 0))
             if names:
                 short = "发现新文件 · 请重新生成预览\n" + "\n".join(names[:6])
-                self.watch_more_button.pack(anchor="w") if len(names) > 6 else self.watch_more_button.pack_forget()
+                self.watch_more_button.grid(row=3, column=0, sticky="w") if len(names) > 6 else self.watch_more_button.grid_remove()
                 text = short
             elif not errors:
                 text = "正在检查新文件（仅提示，不会移动）…"
         else:
-            self.watch_results.pack_forget()
-            self.watch_more_button.pack_forget()
+            self.watch_results.grid_remove()
+            self.watch_more_button.grid_remove()
         self.watch_text.configure(state="normal")
         self.watch_text.delete("1.0", "end")
         self.watch_text.insert("1.0", text)
         self.watch_text.yview_moveto(0)
         self.watch_text.configure(state="disabled")
+        self._sync_banner()
 
     def on_close(self) -> None:
         """关闭窗口：先清理定时任务与观察状态，再销毁窗口。"""
         if self._operation_busy:
             return
+        self._hide_tooltip()
         self._closing = True
         preparation = getattr(self, '_remaining_preparation', None)
         if preparation is not None:
@@ -1293,11 +1667,19 @@ class App:
         )
         self._refresh_plan_buttons()
 
-    def _ask_move(self) -> bool:
+    def _ask_move(self, short: bool = False) -> bool:
         from .directory_archive import RISK_NOTICE
         archive_notice = (f"条件目录归档：{len(self.plan.get('directory_operations', []))} 个\n"
             f"归档根：{self._public(self.settings.downloads_dir + '/' + self.plan['archive']['relative_root'])}\n"
             f"{RISK_NOTICE}\n\n" if self.plan.get('archive', {}).get('enabled') else "")
+        if short:
+            scope = ("" if not self.include_subfolders or not self.selected_scope else
+                     f"（顶层 + {self._public('、'.join(self.selected_scope))}，含其子文件夹）")
+            return messagebox.askokcancel(
+                "确认整理", f"整理 {len(self.plan.get('operations', []))} 个文件？",
+                detail=(archive_notice + f"文件会移到 {self._public(os.path.basename(self.settings.downloads_dir))}{scope}"
+                        f" 里的「{self._public(self.settings.target_parent_name)}」对应文件夹。\n"
+                        "同名文件不会被覆盖，整理后可以撤销。"))
         return messagebox.askokcancel(
             "确认整理",
             "即将移动以下文件：\n\n"
@@ -1320,7 +1702,7 @@ class App:
             return
         approved_plan = self.plan
         approved_hash = approved_plan["plan_hash"]
-        if not self._ask_move():
+        if not self._ask_move(short=True):
             return
         # 模态期间控件变化、重新预览或旧计划被消耗都不能扩大这次授权。
         if self.plan is not approved_plan or not self._plan_matches_current() or self.plan["plan_hash"] != approved_hash:
@@ -1331,7 +1713,7 @@ class App:
             return
         result = self.perform_execution()
         if result is not None:
-            self._report_execution(result)
+            self._report_execution(result, notify=False)
 
     def on_execute(self) -> None:
         if self._operation_busy:
@@ -1364,14 +1746,17 @@ class App:
             return
         self._report_execution(result)
 
-    def _report_execution(self, result) -> None:
+    def _report_execution(self, result, notify: bool = True) -> None:
+        """notify=False（日常主按钮）：全部成功时不再弹完成提示，结果只写在顶部结果条。"""
+        quiet = not notify and not (result.failed or result.not_attempted
+                                    or result.dirs_failed or result.dirs_not_attempted)
         if result.stopped:
             messagebox.showwarning(
                 WINDOW_TITLE,
                 f"执行已停止：{result.stop_reason}\n"
                 f"其余 {result.not_attempted} 个文件未处理；目录成功 {result.archived_dirs}、失败/待检查 {result.dirs_failed}、未处理 {result.dirs_not_attempted}。请查看详情。",
             )
-        else:
+        elif not quiet:
             messagebox.showinfo(
                 WINDOW_TITLE,
                 f"本次共移动 {result.moved} 个文件。\n"
@@ -1467,7 +1852,7 @@ class App:
         if self._operation_busy:
             return
         if self.session.active:
-            self.on_return_to(self.session.active[-1].parent)
+            self.on_return_to(self.session.active[-1].parent, simple=True)
             return
         if self.plan is None:
             return
@@ -1545,15 +1930,15 @@ class App:
         if not plans:
             return
         try:
-            plan = None
-            for plan_id in reversed(plans):
-                try:
-                    candidate = load_verified_plan(self.settings, plan_id, display_only=True)
-                except (PlanError, KeyError, TypeError, ValueError, OSError):
-                    continue
-                if candidate.get('downloads_dir') == self.settings.canonical_downloads_dir:
-                    plan = candidate
-                    break
+            def candidates():
+                for plan_id in reversed(plans):
+                    try:
+                        candidate = load_verified_plan(self.settings, plan_id, display_only=True)
+                    except (PlanError, KeyError, TypeError, ValueError, OSError):
+                        continue
+                    if candidate.get('downloads_dir') == self.settings.canonical_downloads_dir:
+                        yield candidate, self._read_plan_history(candidate)
+            plan = latest_restorable_plan(candidates())
             if plan is None:
                 return
         except Exception:  # noqa: BLE001
@@ -1563,8 +1948,6 @@ class App:
         # 不用历史 selected_scope 或展开 scan_scope 自动勾选新操作的授权。
         self.scope_label.configure(text=self.scope_summary())
         self._render_plan(plan)
-        for row in self.tree.get_children():
-            self.tree.delete(row)
         self.remaining_label.configure(text='')
         self._preview_ready = False
         self.confirmed_hash = None  # 恢复展示从不等同于自动确认

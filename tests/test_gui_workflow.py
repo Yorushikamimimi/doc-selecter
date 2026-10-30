@@ -114,15 +114,17 @@ class SourceChoiceTests(WorkflowBase):
 
     def test_source_switch_invalidates_confirmation_and_never_loads_other_root(self):
         app = self.build(); self.seed('first.pdf'); app.on_preview(); app.on_confirm()
-        old_plan = copy.deepcopy(app.plan); old = self.state_bytes()
+        old_plan = copy.deepcopy(app.plan)
         source = self.sandbox.root/'OtherSource'; source.mkdir(); self.seed('other.csv', source)
         with patch.object(gui.filedialog, 'askdirectory', return_value=str(source)):
             app.source_button.invoke()
-        self.assertIsNone(app.plan); self.assertIsNone(app.confirmed_hash)
+        # 选择框选好新来源后自动生成只读预览：只针对新来源，旧确认不带过来。
+        self.assertIsNone(app.confirmed_hash)
+        self.assertEqual(app.plan['downloads_dir'], str(source))
+        self.assertNotEqual(app.plan['plan_id'], old_plan['plan_id'])
         self.assertEqual(app.selected_scope, []); self.assertFalse(app.subfolder_var.get())
-        app.on_organize()
-        self.assertEqual(self.state_bytes(), old)
         self.assertTrue(Path(old_plan['operations'][0]['source']).exists())
+        self.assertTrue((source / 'other.csv').exists())
         app.on_preview()
         self.assertEqual([op['rel_path'] for op in app.plan['operations']], ['other.csv'])
         self.assertEqual(app.plan['downloads_dir'], str(source))
@@ -170,8 +172,13 @@ class SourceChoiceTests(WorkflowBase):
         require_gui_source(app, str(self.sandbox.downloads))
         self.assertEqual(app.selected_scope,[]);self.assertFalse(app.subfolder_var.get())
         self.assertEqual(app.scope_label['text'],'扫描范围：仅顶层')
-        self.assertEqual(app.plan['selected_scope'],['','Chosen/deep'])
-        self.assertEqual(app.detail_tree.item(app.detail_tree.get_children()[0],'values')[0],'Chosen/deep/a.pdf')
+        self.assertIsNone(app.plan)
+        self.assertIn('未生成预览', app.status_label['text'])
+        saved = gui.load_verified_plan(app.settings, plan['plan_id'])
+        self.assertEqual(saved['selected_scope'],['','Chosen/deep'])
+        self.assertEqual(saved['operations'][0]['rel_path'],'Chosen/deep/a.pdf')
+        self.assertTrue(Path(saved['operations'][0]['source']).is_file())
+        self.assertEqual(app.detail_tree.get_children(),())
         self.assertEqual(app.tree.get_children(),())
         self.assertEqual(self.state_bytes(),before);self.assertIsNone(app.confirmed_hash)
         app.on_organize();self.assertEqual(self.state_bytes(),before)
@@ -496,7 +503,7 @@ class SessionChainTests(WorkflowBase):
         with patch.object(AtomicMover,'rename_excl_at',one_conflict):self.app.on_organize()
         step=self.app.session.active[-1]
         self.assertEqual(step.moved,1); self.assertEqual(step.skipped,1)
-        self.assertIn('跳过 1',self.app.problem_label['text'])
+        self.assertIn('1 个同名文件已存在，没有覆盖',self.app.problem_label['text'])
         self.assertIn('部分整理',self.app.operations_tree.item(str(step.version),'values')[2])
         self.app.on_undo(); self.restored()
 
@@ -564,8 +571,11 @@ class WorkflowLifecycleTests(WorkflowBase):
             elif stage=='undone':app.on_undo()
             for size in ('900x720','1100x760','1400x900'):
                 self.root.geometry(size+'+3000+3000');self.root.update()
-                for widget in (app.source_button,app.source_label,app.scope_label,app.tree,app.preview_button,
-                               app.organize_button,app.undo_button,app.operations_button,app.daily_status_label):
+                content = app.empty_frame if stage in ('initial', 'undone') else app.tree
+                widgets = [app.folder_name_label, app.scope_label, content, app.primary_button, app.operations_button]
+                if stage != 'initial':
+                    widgets.extend((app.source_button, app.undo_button, app.footer_hint_label))
+                for widget in widgets:
                     self.assertTrue(widget.winfo_viewable())
                     node=widget
                     while node is not self.root:
@@ -628,7 +638,7 @@ class SessionWarningTests(WorkflowBase):
         self.assertEqual(app.plan['downloads_dir'], str(clean))
         self.assertEqual(app.session.active[-1].settings, original)
         self.root.geometry('900x720+3000+3000'); self.root.deiconify(); self.root.update()
-        for widget in (app.source_label, app.problem_label, app.preview_button, app.organize_button, app.operations_button):
+        for widget in (app.folder_name_label, app.problem_label, app.primary_button, app.operations_button):
             self.assertTrue(widget.winfo_viewable())
             self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),
                                  self.root.winfo_rooty() + self.root.winfo_height())
