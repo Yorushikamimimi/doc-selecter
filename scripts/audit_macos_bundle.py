@@ -80,7 +80,17 @@ def audit(app: Path):
                 raise ValueError('Mach-O最低系统高于Info声明：' + n + ': ' + v)
     if not mach or not any('libpython' in n for n in mach) or not any('libtcl' in n for n in mach):
         raise ValueError('缺少内置Python／Tcl／Tk动态库。')
-    return {'plist':info,'files':files,'links':links,'mach_o':mach,'user_path_literals':paths,
+    # Exact local webpage whitelist; compare the sealed build manifest hashes.
+    resources = app/'Contents/Resources'
+    metadata = json.loads((resources/'build-info.json').read_text())
+    expected = metadata.get('web_resources_sha256', {})
+    if set(expected) != {'index.html', 'app.css', 'app.js'}:
+        raise ValueError('网页资源白名单不完整。')
+    for name, expected_hash in expected.items():
+        page = resources/'doc_selecter/webui'/name
+        if not page.is_file() or hashlib.sha256(page.read_bytes()).hexdigest() != expected_hash:
+            raise ValueError('网页资源缺失或与构建记录不符：' + name)
+    return {'web_resources_verified':True, 'plist':info,'files':files,'links':links,'mach_o':mach,'user_path_literals':paths,
             'architecture':'arm64','declared_minimum_system':info['LSMinimumSystemVersion'],
             'no_external_runtime_load_dependencies':True}
 

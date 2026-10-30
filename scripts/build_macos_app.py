@@ -22,7 +22,8 @@ MODULES = ('__init__.py', '__main__.py', 'app_startup.py', 'atomic_move.py', 'cl
  'config.py', 'directory_archive.py', 'executor.py', 'gui.py', 'gui_remaining.py',
  'gui_session.py', 'gui_source.py', 'journal.py', 'locking.py', 'plan_hash.py',
  'planner.py', 'remaining_archive.py', 'rules.py', 'scanner.py', 'snapshot.py',
- 'undo.py', 'watcher.py')
+ 'undo.py', 'watcher.py', 'ui_controller.py', 'webui.py')
+WEB_RESOURCES = ('index.html', 'app.css', 'app.js')
 ICON_SIZES = ((16, 1), (16, 2), (32, 1), (32, 2), (128, 1), (128, 2),
               (256, 1), (256, 2), (512, 1), (512, 2))
 
@@ -41,7 +42,7 @@ def build(output: Path, python: str = DEFAULT_PYTHON, *, repo: Path = REPO) -> P
     master = repo/'assets/icons/file-organizer-master.png'
     w, h = png_size(master)
     if w != h: raise ValueError('母版不是方形，拒绝裁切或拉伸。')
-    for p in [repo/'doc_selecter'/m for m in MODULES] + [master, repo/'packaging/bundle_entry.py', repo/'packaging/launcher.m']:
+    for p in [repo/'doc_selecter'/m for m in MODULES] + [repo/'doc_selecter/webui'/n for n in WEB_RESOURCES] + [master, repo/'packaging/bundle_entry.py', repo/'packaging/launcher.m']:
         if p.is_symlink() or not p.is_file(): raise ValueError(f'正式资源缺失或是链接：{p.name}')
     output = output.absolute()
     output.mkdir(parents=True, exist_ok=True)
@@ -50,6 +51,9 @@ def build(output: Path, python: str = DEFAULT_PYTHON, *, repo: Path = REPO) -> P
     contents = app/'Contents'; resources = contents/'Resources'; macos = contents/'MacOS'
     (resources/'doc_selecter').mkdir(parents=True);macos.mkdir()
     for m in MODULES: shutil.copyfile(repo/'doc_selecter'/m, resources/'doc_selecter'/m)
+    (resources/'doc_selecter/webui').mkdir()
+    for n in WEB_RESOURCES:
+        shutil.copyfile(repo/'doc_selecter/webui'/n, resources/'doc_selecter/webui'/n)
     shutil.copyfile(repo/'packaging/bundle_entry.py',resources/'bundle_entry.py')
     shutil.copyfile(master,resources/'file-organizer-master.png')
     iconset=output/'FileOrganizer.iconset';iconset.mkdir()

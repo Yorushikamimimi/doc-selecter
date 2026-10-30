@@ -79,7 +79,7 @@ class DistributableTests(SandboxTestCase):
     def test_old_local_packaging_whitelist_stays_identical(self):
         baseline={p.name for p in (REPO/'doc_selecter').glob('*.py')}
         self.assertEqual(set(builder.MODULES),baseline)
-        self.assertEqual(len(builder.MODULES),22)
+        self.assertEqual(len(builder.MODULES),24)
 
     def test_runtime_archive_hash_mismatch_refuses_before_execution(self):
         prep=module('prepare_macos_build')

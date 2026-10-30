@@ -164,6 +164,10 @@ def app_main(argv=None) -> int:
                 except BlockingIOError:
                     print('已有文件整理助手窗口运行，未创建第二个窗口。', flush=True)
                     return 0
+                if not diagnose and '--tk' not in argv and os.environ.get('DOCSELECTER_UI') != 'tk':
+                    from .webui import run
+                    run(settings)
+                    return 0
                 from .gui import build_app
                 root, app = build_app(settings)
                 root.tk.call('tk', 'appname', APP_NAME)

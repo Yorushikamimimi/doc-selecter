@@ -36,6 +36,16 @@
     "LICENSE.sqlite.txt",
     "LICENSE.tcl.txt",
     "LICENSE.tix.txt",
-    "LICENSE.zlib.txt"
+    "LICENSE.zlib.txt",
+    "LICENSE.pywebview.txt",
+    "LICENSE.pyobjc-core.txt",
+    "LICENSE.pyobjc-framework-Cocoa.txt",
+    "LICENSE.pyobjc-framework-Quartz.txt",
+    "LICENSE.pyobjc-framework-Security.txt",
+    "LICENSE.pyobjc-framework-UniformTypeIdentifiers.txt",
+    "LICENSE.pyobjc-framework-WebKit.txt",
+    "LICENSE.bottle.txt",
+    "LICENSE.proxy_tools.txt",
+    "LICENSE.typing_extensions.txt"
   ]
 }

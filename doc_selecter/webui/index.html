@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+<title>文件整理助手</title><link rel="stylesheet" href="app.css"><script src="app.js" defer></script></head>
+<body><div class="win" id="win"><aside class="side">
+<div class="folder" id="folder"><div class="ficon" aria-hidden="true"><svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M1 3a1.5 1.5 0 0 1 1.5-1.5h3.2l1.6 1.7h6.2A1.5 1.5 0 0 1 15 4.7v6.8A1.5 1.5 0 0 1 13.5 13h-11A1.5 1.5 0 0 1 1 11.5z"/></svg></div><div><div class="n" id="fname">还没选文件夹</div><div class="s" id="fsub">选一个开始</div></div><button class="chg" id="chg">更换</button></div>
+<label class="toggle"><input type="checkbox" id="recursive">包含子文件夹</label><button class="tb" id="folders">选择子文件夹…</button>
+<div class="sec" id="sectitle">类别</div><div class="cats" id="cats"></div><button class="tb skipline" id="skipline"></button>
+</aside><section class="main"><div class="bar"><span class="t" id="title">整理文件</span><span class="badge" id="badge">未预览</span><div class="tools"><button class="tb" id="details">详情</button><button class="tb" id="history">操作记录</button><button class="tb" id="settings">设置</button></div></div>
+<div class="progress" id="prog"><i></i></div><div id="bannerSlot" aria-live="polite"></div><div class="content" id="content"></div>
+<div class="foot"><span class="h" id="hint">确认前不会移动任何文件 · 同名文件不覆盖</span><button class="btn" id="undo" disabled>撤销上一次</button><button class="btn" id="arch" disabled>归档剩余项目…</button><button class="btn p hidden" id="primary"></button></div>
+<div class="veil" id="veil"><section class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title"></section></div>
+</section><div class="tip" id="tip"></div></div></body></html>

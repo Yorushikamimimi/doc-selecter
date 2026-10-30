@@ -33,10 +33,16 @@ def prepare(output, archive=None):
     python = runtime/'python/bin/python3'
     env = os.environ.copy()
     env.update(TMPDIR=str(output/'tmp'), PYTHONDONTWRITEBYTECODE='1')
+    # Bootstrap the already locked build backend before the hash-checked sdist.
+    backend = output/'backend-requirements.txt'
+    backend.write_text(''.join(line + '\n' for line in (REPO/'packaging/requirements-macos-build.txt').read_text().splitlines() if line.startswith('setuptools==')))
     commands = [[str(python), '-I', '-B', '-m', 'venv', str(output/'venv')],
                 [str(output/'venv/bin/python3'), '-I', '-B', '-m', 'pip', '--isolated',
                  '--disable-pip-version-check', 'install', '--no-cache-dir', '--only-binary=:all:',
-                 '--require-hashes', '-r', str(REPO/'packaging/requirements-macos-build.txt')]]
+                 '--require-hashes', '-r', str(backend)],
+                [str(output/'venv/bin/python3'), '-I', '-B', '-m', 'pip', '--isolated',
+                 '--disable-pip-version-check', 'install', '--no-cache-dir', '--only-binary=:all:',
+                 '--no-binary=proxy-tools', '--no-build-isolation', '--require-hashes', '-r', str(REPO/'packaging/requirements-macos-build.txt')]]
     logs = []
     for args in commands:
         r = subprocess.run(args, env=env, capture_output=True, text=True, timeout=300)

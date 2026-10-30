@@ -70,6 +70,7 @@ def build(output: Path, *, make_dmg=True) -> Path:
     lock = json.loads(LOCK_FILE.read_text())
     validate_environment(lock)
     sources = [REPO/'doc_selecter'/m for m in MODULES]
+    sources += [REPO/'doc_selecter/webui'/n for n in _local.WEB_RESOURCES]
     sources += [REPO/'packaging'/n for n in ('frozen_entry.py', 'frozen_runtime.py')]
     sources += [REPO/'packaging/licenses'/n for n in lock['license_files']]
     sources += [REPO/'assets/icons/file-organizer-master.png', REPO/'LICENSE']
@@ -91,6 +92,9 @@ def build(output: Path, *, make_dmg=True) -> Path:
 
     for m in MODULES:
         shutil.copyfile(REPO/'doc_selecter'/m, stage/'doc_selecter'/m)
+    (stage/'doc_selecter/webui').mkdir()
+    for n in _local.WEB_RESOURCES:
+        shutil.copyfile(REPO/'doc_selecter/webui'/n, stage/'doc_selecter/webui'/n)
     for n in ('frozen_entry.py', 'frozen_runtime.py'):
         shutil.copyfile(REPO/'packaging'/n, stage/n)
     licenses = stage/'licenses'; licenses.mkdir()
@@ -110,15 +114,15 @@ def build(output: Path, *, make_dmg=True) -> Path:
     run(['/usr/bin/iconutil', '--convert', 'icns', str(iconset), '--output', str(icon)])
     source_hashes = {m:digest(stage/'doc_selecter'/m) for m in MODULES}
     metadata = {'format':1, 'version':lock['release_version'], 'runtime':lock,
-                'source_sha256':source_hashes, 'icon_master_sha256':digest(master),
+                'source_sha256':source_hashes, 'web_resources_sha256':{n:digest(stage/'doc_selecter/webui'/n) for n in _local.WEB_RESOURCES}, 'icon_master_sha256':digest(master),
                 'packaging':'PyInstaller onedir/windowed', 'developer_id':False, 'notarized':False}
     (stage/'build-info.json').write_text(json.dumps(metadata, ensure_ascii=False, indent=2))
-    datas = [(str(licenses), 'licenses'), (str(stage/'build-info.json'), '.'), (str(icon), '.')]
+    datas = [(str(stage/'doc_selecter/webui'), 'doc_selecter/webui'), (str(licenses), 'licenses'), (str(stage/'build-info.json'), '.'), (str(icon), '.')]
     spec = output/'FileOrganizer.spec'
     info = {'CFBundleDisplayName':NAME, 'CFBundleName':NAME,
             'CFBundleShortVersionString':lock['release_version'], 'CFBundleVersion':lock['release_version'],
             'LSMinimumSystemVersion':lock['deployment_target'], 'NSHighResolutionCapable':True,
-            'LSMultipleInstancesProhibited':True, 'DocSelecterRuntime':'bundled Python + Tcl/Tk'}
+            'LSMultipleInstancesProhibited':True, 'DocSelecterRuntime':'bundled Python + WebKit bridge + Tcl/Tk fallback'}
     spec.write_text(f'''a = Analysis([{str(stage/'frozen_entry.py')!r}], pathex=[{str(stage)!r}],
     binaries=[], datas={datas!r}, hiddenimports={['doc_selecter.'+Path(m).stem for m in MODULES if m!='__init__.py']!r},
     runtime_hooks=[{str(stage/'frozen_runtime.py')!r}],

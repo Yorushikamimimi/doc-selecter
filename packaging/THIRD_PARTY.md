@@ -9,3 +9,19 @@
 - pyinstaller-hooks-contrib、altgraph、macholib、packaging、setuptools仅为隔离构建依赖，版本及wheel哈希锁定；不作为用户运行时整体复制。
 
 官方资料：[PyInstaller许可](https://pyinstaller.org/en/stable/license.html)、[macOS冻结／架构及签名](https://pyinstaller.org/en/stable/feature-notes.html#macos-multi-arch-support)、[PBS运行与许可元数据](https://github.com/astral-sh/python-build-standalone/blob/main/docs/running.rst)、[CPython许可](https://docs.python.org/3.12/license.html)、[Tcl官方许可说明](https://www.tcl-lang.org/about/support.html)。
+
+## 网页界面运行依赖（路线 B）
+
+以下组件仅装入隔离构建环境，由 PyInstaller 按实际导入收集；网页本身不引用 CDN。版本和选定发行文件的 SHA256 固定在 `requirements-macos-build.txt`，哈希逐项与 PyPI 对应版本 JSON 元数据核对。
+
+| 组件 | 版本 | 随包许可原文 |
+| --- | --- | --- |
+| pywebview | 6.2.1 | BSD-3-Clause，LICENSE.pywebview.txt |
+| pyobjc-core、pyobjc-framework-Cocoa、Quartz、Security、UniformTypeIdentifiers、WebKit | 12.2.2 | MIT，各 LICENSE.pyobjc-*.txt |
+| bottle | 0.13.4 | MIT，LICENSE.bottle.txt |
+| proxy_tools | 0.1.0 | 发行元数据标为 MIT，但上游许可原文为 BSD；随包保留上游原文 LICENSE.proxy_tools.txt，不把元数据标签替代原文 |
+| typing_extensions | 4.16.0 | PSF-2.0，LICENSE.typing_extensions.txt |
+
+许可优先从对应 wheel 原样提取；pyobjc-core、Security、UniformTypeIdentifiers 的 wheel 未带许可，取自同版本、经 PyPI SHA256 校验的源码发行包。proxy_tools 0.1.0 源码包未带许可，取自[上游固定提交 db43f1e 的 LICENSE.txt](https://github.com/jtushman/proxy_tools/blob/db43f1e35d4f90a65c5a4d56d9e9af88212ec6e6/LICENSE.txt)。其源码包 SHA256 同样锁定；安装前先安装已锁定的 setuptools，关闭构建隔离，避免临时下载未锁定构建依赖。
+
+系统 WebKit、Cocoa 等 macOS 框架不随包复制。pywebview 桥接所需的动态函数创建在本地 CSP 中仅开放 `unsafe-eval`；资源、连接和嵌入内容仍限制为本地或禁止。没有开启外部下载。默认网页入口，`--tk` 或 `DOCSELECTER_UI=tk` 可切回保留的 Tk 界面。
