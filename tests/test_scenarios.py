@@ -107,7 +107,7 @@ class ConflictTests(SandboxTestCase):
     def test_s3_dest_exists_is_skipped_without_overwrite(self) -> None:
         self.sandbox.add_file("a.zip", b"SOURCE-ZIP")
         self.sandbox.add_file("keep.pdf", b"PDF")
-        dest_dir = self.sandbox.target_dir("压缩包")
+        dest_dir = self.sandbox.target_dir("压缩包") / "ZIP"
         dest_dir.mkdir(parents=True)
         existing = dest_dir / "a.zip"
         existing.write_bytes(b"PRE-EXISTING-DIFFERENT")
@@ -128,7 +128,7 @@ class ConflictTests(SandboxTestCase):
 
     def test_s3_dest_exists_as_directory_is_skipped(self) -> None:
         self.sandbox.add_file("a.zip", b"SOURCE-ZIP")
-        dest = self.sandbox.target_dir("压缩包") / "a.zip"
+        dest = self.sandbox.target_dir("压缩包") / "ZIP" / "a.zip"
         dest.mkdir(parents=True)
 
         plan = self.sandbox.make_plan()
@@ -144,7 +144,7 @@ class ConflictTests(SandboxTestCase):
         """在「准备移动」与「真正调用原语」之间由外部创建同名目标。"""
         self.sandbox.add_file("race.zip", b"SOURCE-RACE")
         plan = self.sandbox.make_plan()
-        dest = self.sandbox.target_dir("压缩包") / "race.zip"
+        dest = self.sandbox.target_dir("压缩包") / "ZIP" / "race.zip"
 
         def hook(kind: str, info: dict) -> None:
             if kind == "before_move":

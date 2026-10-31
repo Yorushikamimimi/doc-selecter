@@ -233,3 +233,22 @@ pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.6 -apple-system,Blin
 .drawer .hnote b{color:var(--ink);font-weight:600}
 .seg button:disabled{opacity:.4;cursor:default}
 .rec:focus-visible,.hmore:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Filename-only refinements; isolated names avoid existing panel styles. */
+.classify-name{min-width:0;text-align:left}
+.classify-name .fn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.classify-basis{font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.classify-chip{display:block;width:fit-content;margin-top:3px;font-size:11.5px;padding:1px 8px;border-radius:999px;background:var(--warn-soft);color:var(--warn);max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.classify-chip.classify-info{background:var(--info-soft);color:var(--muted)}
+.classify-row{height:auto;min-height:54px;padding-top:8px;padding-bottom:8px}
+.classify-row .to b{font-weight:600;color:var(--ink)}
+.classify-preview .row,.classify-preview .hdr{grid-template-columns:28px minmax(0,1.5fr) 56px minmax(0,1.3fr) 0;column-gap:8px}
+.classify-preview .row.docs,.classify-preview .hdr.docs{grid-template-columns:28px minmax(0,1.5fr) 48px 56px minmax(0,1.3fr) 0}
+.classify-preview .st.hint{grid-column:2/-1;font-size:11.5px}
+.classify-help{position:absolute;left:calc(100% + 10px);top:50%;transform:translateY(-50%);width:260px;background:var(--win);color:var(--ink);border-radius:10px;padding:10px 12px;box-shadow:var(--shadow);font-size:12px;visibility:hidden;pointer-events:none;z-index:6}
+.classify-help b{display:block;margin-bottom:4px}.classify-help-note{color:var(--muted)}.classify-help ul{margin:6px 0 0;padding-left:16px}
+.cat:hover .classify-help,.cat:focus-within .classify-help{visibility:visible}
+.cat.classify-filter{margin-top:8px;color:var(--warn)}.classify-filter .ct{color:var(--warn)}.classify-filter.classify-on{background:var(--sel)}
+.cat:focus-visible,.classify-name .fn:focus-visible,.classify-chip:focus-visible,.classify-row .to:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:4px}
+.tip{z-index:20}
+.win>aside.side{z-index:2}

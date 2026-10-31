@@ -99,14 +99,16 @@ class Settings:
         return os.path.join(self.target_root, category)
 
     def dest_for(self, category: str, filename: str, rel_dir: str = "",
-                 document_subcategory: str | None = None) -> str:
+                 document_subcategory: str | None = None, *, subfolder: str | None = None) -> str:
         """目标路径：``目标根/<类别>/<相对目录链>/<原文件名>``。
 
         ``rel_dir`` 是相对下载目录的父目录链（``""`` 表示顶层文件，维持既有布局）。
         """
         rel_dir = (rel_dir or "").strip().strip("/")
         parts = [self.target_root, category]
-        if category == "文档资料" and not rel_dir and document_subcategory:
+        if not rel_dir and subfolder:
+            parts.append(subfolder)
+        elif category == "文档资料" and not rel_dir and document_subcategory:
             parts.append(document_subcategory)
         if rel_dir:
             parts.extend(part for part in rel_dir.split("/") if part)

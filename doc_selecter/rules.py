@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import re
 import stat as statmod
+from urllib.parse import unquote
 from dataclasses import dataclass
 
 # --- 七类（顺序固定，参与 plan_hash 的 category_selection 排序） ---------------
@@ -134,6 +135,9 @@ _EMAIL = re.compile(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+"
 # 连续 11 位数字（手机号样式）、18 位身份证样式、连续至少 12 位数字。
 # 无需判断号码是否真实，也不校验真实身份；只作文件名保守筛查。
 _PRIVATE_NUMBER = re.compile(r"(?<![0-9])(?:[0-9]{11}|[0-9]{17}[0-9xX]|[0-9]{12,})(?![0-9])")
+# 微信保存的图片名带的是保存时间（14 位日期时间／13 位毫秒时间戳），不是号码。
+# 新规则只对这两个精确前缀免长数字检查；其余敏感词、邮箱等检查照旧。
+_WECHAT_TIMESTAMP = re.compile(r"^(?:微信图片_20[0-9]{12}|mmexport1[0-9]{12})(?![0-9])")
 UNFINISHED_SUFFIXES = frozenset(
     ".crdownload .part .partial .download .filepart .opdownload .tmp".split()
 )
@@ -252,13 +256,15 @@ def is_code_project_dir(names: frozenset[str]) -> tuple[bool, str]:
     return False, ""
 
 
-def is_sensitive_dir(name: str) -> bool:
+def is_sensitive_dir(name: str, *, legacy: bool = False) -> bool:
     """疑似敏感**目录**名（保守筛查，只看名字）。
 
     与文件规则一致：命中即整目录跳过，且只在内存里计数，不落盘、不展示名称。
     """
     low = name.lower()
-    if is_sensitive_name(name):
+    if not legacy and decoded_filename(name) != name and is_sensitive_dir(decoded_filename(name), legacy=True):
+        return True
+    if is_sensitive_name(name, legacy=legacy):
         return True
     if low in (".ssh", ".gnupg", ".aws", ".kube"):
         return True
@@ -341,8 +347,78 @@ def document_subcategory(ext: str) -> str | None:
     return "其他文档"
 
 
-def is_sensitive_name(name: str) -> bool:
+# Filename-only refinements. Keep the historic document format helper unchanged.
+PHONE_NAME = re.compile(r"IMG_E?[0-9]+(?: \([0-9]+\))?$", re.IGNORECASE)
+COMPUTER_SCREENSHOT = re.compile(
+    r"^(?:截屏|屏幕快照|Screenshot|Screen Shot)\s*[0-9]{4}[-年.][0-9]{1,2}[-月.][0-9]{1,2}(?:日|\b|[_ ])", re.IGNORECASE)
+COURSE_TERMS = ("大作业", "实验报告", "课程设计", "作业", "课设", "课程", "期末", "期中",
+                "复习", "习题", "试卷", "考试", "课件", "讲义", "教案", "开题", "答辩", "论文", "选课", "课表")
+AUDIO_EXTS = frozenset(".mp3 .wav .flac .aac .m4a .ogg .opus .aiff .alac .wma".split())
+CATEGORY_SUBFOLDERS = {
+    "图片截图": ("手机照片", "手机截屏", "电脑截屏", "微信图片", "其他图片"),
+    "音视频": ("手机视频", "视频", "音频"),
+    "文档资料": ("学校课程", "PDF", "Word", "Excel", "PPT", "Markdown", "其他文档"),
+    "安装包": ("Mac 安装包（dmg pkg）", "Windows 安装包（exe msi）", "手机安装包（apk）", "其他安装包"),
+    "压缩包": ("ZIP", "RAR 和 7Z", "其他压缩包"),
+    "代码与数据": (), "待确认": (),
+}
+
+
+def decoded_filename(name: str) -> str:
+    """Display/keyword candidate only; never use it as a filesystem name."""
+    if not re.search(r"%[0-9a-fA-F]{2}", name):
+        return name
+    try:
+        return unquote(name, encoding="utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return name
+
+
+def file_subfolder(name: str, category: str) -> str | None:
+    """Caller limits this filename rule to top-level files."""
+    ext = normalize_extension(name)
+    stem = os.path.splitext(name)[0]
+    phone = bool(PHONE_NAME.fullmatch(stem))
+    if category == "图片截图":
+        if phone and ext in {".heic", ".heif", ".jpg", ".jpeg", ".dng"}: return "手机照片"
+        if phone and ext == ".png": return "手机截屏"
+        if COMPUTER_SCREENSHOT.match(stem): return "电脑截屏"
+        if stem.lower().startswith(("微信图片_", "mmexport")): return "微信图片"
+        return "其他图片"
+    if category == "音视频":
+        if phone and ext in {".mov", ".mp4"}: return "手机视频"
+        return "音频" if ext in AUDIO_EXTS else "视频"
+    if category == "文档资料":
+        if any(term in os.path.splitext(decoded_filename(name))[0] or term in stem for term in COURSE_TERMS):
+            return "学校课程"
+        return document_subcategory(ext)
+    if category == "安装包":
+        if ext in {".dmg", ".pkg", ".mpkg"}: return "Mac 安装包（dmg pkg）"
+        if ext in {".exe", ".msi", ".msix", ".msixbundle", ".appx", ".appxbundle"}: return "Windows 安装包（exe msi）"
+        if ext in {".apk", ".apks", ".xapk"}: return "手机安装包（apk）"
+        return "其他安装包"
+    if category == "压缩包":
+        return "ZIP" if ext == ".zip" else "RAR 和 7Z" if ext in {".rar", ".7z"} else "其他压缩包"
+    return None
+
+
+def classification_basis(name: str, category: str, ext: str) -> str:
+    sub = file_subfolder(name, category)
+    if sub == "学校课程":
+        term = next(t for t in COURSE_TERMS if t in os.path.splitext(name)[0] or t in os.path.splitext(decoded_filename(name))[0])
+        return f"名字里有「{term}」→ 学校课程"
+    if sub in {"手机照片", "手机截屏", "手机视频"}:
+        return f"名字是 IMG_ + 数字，格式 {ext.lstrip('.').upper()} → {sub}"
+    if sub == "电脑截屏": return "名字是截屏前缀加日期 → 电脑截屏"
+    if sub == "微信图片": return "名字以 微信图片_ 或 mmexport 开头 → 微信图片"
+    return f"扩展名 {ext} → {sub or category}"
+
+
+def is_sensitive_name(name: str, *, legacy: bool = False) -> bool:
     """保守的敏感性名称筛查（只看名称/扩展名，绝不读取内容）。"""
+    decoded = decoded_filename(name) if not legacy else name
+    if decoded != name and is_sensitive_name(decoded, legacy=True):
+        return True
     low = name.lower()
     if any(low.endswith(suffix) for suffix in SENSITIVE_SUFFIXES):
         return True
@@ -350,12 +426,12 @@ def is_sensitive_name(name: str) -> bool:
         return True
     return bool(any(term in low for term in SENSITIVE_TERMS)
                 or _PRIVATE_WORD.search(name) or _EMAIL.search(name)
-                or _PRIVATE_NUMBER.search(name))
+                or _PRIVATE_NUMBER.search(name if legacy else _WECHAT_TIMESTAMP.sub("", name, count=1)))
 
 
-def is_sensitive_relative_path(rel_path: str) -> bool:
+def is_sensitive_relative_path(rel_path: str, *, legacy: bool = False) -> bool:
     """只筛查相对文件名和父目录段；不检查下载根之外的系统路径。"""
-    return any(is_sensitive_dir(part) for part in rel_path.split("/") if part)
+    return any(is_sensitive_dir(part, legacy=legacy) for part in rel_path.split("/") if part)
 
 
 def redact_private_text(text: str, *, roots: tuple[str, ...] = ()) -> str:
@@ -385,7 +461,7 @@ def is_unfinished(name: str) -> bool:
     return normalize_extension(name) in UNFINISHED_SUFFIXES
 
 
-def classify_entry(name: str, st_mode: int, *, excluded_names: frozenset[str] = frozenset()) -> Classification:
+def classify_entry(name: str, st_mode: int, *, excluded_names: frozenset[str] = frozenset(), legacy: bool = False) -> Classification:
     """按互斥优先级判定一个顶层条目。
 
     ``st_mode`` 来自 ``lstat``（不跟随符号链接）。
@@ -403,7 +479,7 @@ def classify_entry(name: str, st_mode: int, *, excluded_names: frozenset[str] = 
         )
 
     # 1) 疑似敏感（最高优先级；只记数量，不保留名称）
-    if is_sensitive_name(name):
+    if is_sensitive_name(name, legacy=legacy):
         return excluded(EXCLUDED_SENSITIVE, "名称或扩展名命中疑似敏感规则（保守筛查，未读取内容）")
     # 2) 符号链接
     if is_link:
@@ -430,7 +506,7 @@ def classify_entry(name: str, st_mode: int, *, excluded_names: frozenset[str] = 
         )
     return Classification(
         name=name, status="included", category=category, extension=ext,
-        basis=f"扩展名 {matched} 命中「{category}」规则",
+        basis=(f"扩展名 {matched} 命中「{category}」规则" if legacy else classification_basis(name, category, matched)),
     )
 
 

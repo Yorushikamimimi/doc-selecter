@@ -26,7 +26,7 @@ from .plan_hash import (
     verify_plan_hash,
 )
 from .rules import (CATEGORIES, EXCLUDED_SENSITIVE, EXCLUSION_LABELS,
-                    document_subcategory, is_sensitive_relative_path,
+                    document_subcategory, file_subfolder, classify_entry, is_sensitive_relative_path,
                     redact_private_text)
 from .scanner import ScanResult, scan_scope
 
@@ -126,21 +126,20 @@ def build_plan(
         assert entry.identity is not None
         index += 1
         subcategory = (
-            document_subcategory(entry.classification.extension)
-            if category == "文档资料" and not entry.rel_dir else None
+            file_subfolder(entry.name, category) if not entry.rel_dir else None
         )
         operation = {
             "op_id": f"op-{index:04d}",
             "kind": "file",
             "rel_path": entry.rel_path,
             "source": unicodedata.normalize("NFC", os.path.join(settings.canonical_downloads_dir, *entry.rel_path.split("/"))),
-            "dest": unicodedata.normalize("NFC", settings.dest_for(category, entry.name, entry.rel_dir, subcategory)),
+            "dest": unicodedata.normalize("NFC", settings.dest_for(category, entry.name, entry.rel_dir, subfolder=subcategory)),
             "category": category,
             "classification_basis": entry.classification.basis,
             "identity": entry.identity.as_dict(),
         }
         if subcategory is not None:
-            operation["document_subcategory"] = subcategory
+            operation["subfolder"] = subcategory
         operations.append(
             operation
         )
@@ -253,40 +252,16 @@ def assert_new_move_admissible(settings: Settings, plan: dict[str, Any], *, stru
             relatives.append(relative(path[len(root) + 1:]))
         if any(is_sensitive_relative_path(rel) for rel in relatives):
             raise MoveAdmissionRefused("计划含当前筛查规则应跳过的项，请重新生成预览并确认。")
-        # 旧 v2 计划没有子类字段，必须继续按其持久化旧去向校验，供 undo/recover
-        # 使用；新规则计划则要求顶层文档带有明确子类目标。
-        legacy_layout = plan.get("schema_version") == 2 and plan.get("rules_version") == "milestone4-privacy-r11"
-        expected_subcategory = op.get("document_subcategory")
-        if legacy_layout and expected_subcategory is None:
-            expected_dest = target + "/" + category + "/" + rel_path
-            if (op["source"] != unicodedata.normalize("NFC", anchor + "/" + rel_path)
-                    or op["dest"] != unicodedata.normalize("NFC", expected_dest)):
-                raise PlanError(
-                    f"{op_id}: 旧计划目标与持久化相对层级不一致：{op['dest']!r} != {expected_dest!r}"
-                )
-            continue
-        legacy_layout = plan.get("schema_version") == 2 and plan.get("rules_version") == "milestone4-privacy-r11"
-        if not legacy_layout:
-            from .rules import (DOCUMENT_SUBCATEGORIES,
-                                document_subcategory as expected_document_subcategory,
-                                normalize_extension)
-            actual_subcategory = expected_document_subcategory(normalize_extension(name))
-            if category == "文档资料" and not rel_dir and (
-                    not isinstance(expected_subcategory, str)
-                    or not expected_subcategory
-                    or expected_subcategory not in DOCUMENT_SUBCATEGORIES
-                    or actual_subcategory != expected_subcategory):
-                raise MoveAdmissionRefused("顶层文档必须绑定有效子类，请重新生成预览并确认。")
-            if (expected_subcategory is not None and (
-                    category != "文档资料" or rel_dir
-                    or expected_subcategory not in DOCUMENT_SUBCATEGORIES
-                    or actual_subcategory != expected_subcategory)):
-                raise MoveAdmissionRefused("计划文档子类与扩展名或范围不一致，请重新生成预览并确认。")
-        if category != "文档资料" or rel_dir:
-            if expected_subcategory is not None:
-                raise MoveAdmissionRefused("非顶层文档操作不能包含文档子类，请重新生成预览并确认。")
+        classification = classify_entry(name, stat.S_IFREG)
+        expected_subcategory = file_subfolder(name, category) if not rel_dir else None
+        if (classification.status != "included" or classification.category != category
+                or classification.basis != op.get("classification_basis")
+                or op.get("subfolder") != expected_subcategory
+                or (expected_subcategory is None and "subfolder" in op)
+                or "document_subcategory" in op):
+            raise MoveAdmissionRefused("计划子类、名称、扩展名或依据与当前规则不一致，请重新生成预览并确认。")
         expected_dest = target + "/" + category + "/"
-        if category == "文档资料" and not rel_dir and expected_subcategory:
+        if expected_subcategory:
             expected_dest += expected_subcategory + "/"
         expected_dest += rel_path
         if (op["source"] != unicodedata.normalize("NFC", anchor + "/" + rel_path)
@@ -416,7 +391,7 @@ def assert_plan_format_supported(plan: dict[str, Any]) -> None:
     """计划格式版本必须与当前实现兼容（旧格式明确拒绝，不静默改语义）。"""
     version = plan.get("schema_version")
     from .remaining_archive import RULES_VERSION as REMAINING_RULES
-    supported = {2: {"milestone4-privacy-r11", "milestone5-document-subcategories-r1"}, 3: {RULES_VERSION}, 4: {REMAINING_RULES}}
+    supported = {2: {"milestone4-privacy-r11", "milestone5-document-subcategories-r1"}, 3: {RULES_VERSION, "milestone5-empty-dir-archive-r1"}, 4: {REMAINING_RULES}}
     if version not in supported or plan.get("rules_version") not in supported[version]:
         raise PlanError(
             f"计划格式版本不兼容（计划 v{version}，当前需要 v{PLAN_SCHEMA_VERSION}）："
@@ -563,7 +538,7 @@ def verify_plan_binding(settings: Settings, plan: dict[str, Any]) -> None:
             )
         if os.path.basename(dest.replace("/", os.sep)) != name:
             raise PlanError(f"{op_id}: 目标文件名与源文件名不一致（不支持改名）：{dest!r}")
-        subcategory = operation.get("document_subcategory")
+        subcategory = operation.get("subfolder", operation.get("document_subcategory"))
         legacy_layout = plan.get("schema_version") == 2 and plan.get("rules_version") == "milestone4-privacy-r11"
         if not legacy_layout and category == "文档资料" and not rel_dir:
             from .rules import DOCUMENT_SUBCATEGORIES, document_subcategory as expected_document_subcategory, normalize_extension
@@ -590,7 +565,7 @@ def verify_plan_binding(settings: Settings, plan: dict[str, Any]) -> None:
                 f"{dest!r} != {expected_dest!r}"
             )
         raw_source = os.path.join(anchor, *rel_path.split("/"))
-        raw_subcategory = operation.get("document_subcategory")
+        raw_subcategory = operation.get("subfolder", operation.get("document_subcategory"))
         raw_dest_parts = [anchor, settings.target_parent_name, *category.split("/")]
         if raw_subcategory and category == "文档资料" and not rel_dir:
             raw_dest_parts.append(str(raw_subcategory))
@@ -665,7 +640,7 @@ def capture_dir_identities(
             )
             out["source_dirs"][rel] = _dir_identity(abs_dir)
         category = str(operation.get("category"))
-        subcategory = operation.get("document_subcategory")
+        subcategory = operation.get("subfolder", operation.get("document_subcategory"))
         base_label = f"{category}/{subcategory}" if subcategory else category
         label = f"{base_label}/{rel_dir}" if rel_dir else base_label
         for rel in source_chain(label)[1:]:

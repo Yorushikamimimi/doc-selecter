@@ -9,6 +9,6 @@
 """
 
 __version__ = "0.1.0"
-RULES_VERSION = "milestone5-empty-dir-archive-r1"
+RULES_VERSION = "milestone6-finer-subfolders-r1"
 
 __all__ = ["__version__", "RULES_VERSION"]

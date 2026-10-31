@@ -211,9 +211,9 @@ def _in_selected_scope(rel_child: str, selected: list[str]) -> bool:
     return False
 
 
-def _classify_dir(name: str):
+def _classify_dir(name: str, *, legacy: bool = False):
     """判定一个目录条目：返回 ``(是否可进入, 原因码, 说明)``。"""
-    if is_sensitive_dir(name):
+    if is_sensitive_dir(name, legacy=legacy):
         return False, EXCLUDED_SENSITIVE_DIR, "疑似敏感目录名（保守筛查；仅计数量，不记录名称）"
     if is_package_dir(name):
         return False, EXCLUDED_PACKAGE_DIR, "包目录（.app/.framework 等）：整体跳过，绝不进入"

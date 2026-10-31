@@ -19,6 +19,7 @@ from .rules import (CATEGORIES, classify_entry, is_code_project_dir,
                     is_package_dir, is_sensitive_relative_path, is_temp_download)
 from .scanner import normalize_scope
 
+# Schema 4 keeps its original filename/basis contract; no finer destinations here.
 RULES_VERSION = 'milestone5-remaining-archive-r1'
 HASH_ALG = 'sha256/canonical-json-v3'
 LAYOUT_VERSION = 'remaining-slots-v1'
@@ -33,7 +34,7 @@ def relative(value, *, empty=False):
     if (not isinstance(value, str) or (not value and not empty) or '\x00' in value
             or (value and any(p in ('', '.', '..') for p in value.split('/')))):
         refuse('剩余归档相对路径非法')
-    if is_sensitive_relative_path(value):
+    if is_sensitive_relative_path(value, legacy=True):
         refuse('剩余归档含受保护名称；请重新预览（不展示名称）')
     if value and any(p.startswith('.') or is_package_dir(p) or is_temp_download(p)
                      for p in value.split('/')):
@@ -93,7 +94,7 @@ def discover_remaining(settings, *, scope_dirs=None, recursive=False):
             result.scan_scope.append(nfc(rel))
         for name in sorted(names):
             child = rel + '/' + name if rel else name
-            if is_sensitive_relative_path(child):
+            if is_sensitive_relative_path(child, legacy=True):
                 exclude('疑似私人项目')
                 continue  # NEVER stat or persist sensitive names.
             if not rel and name == settings.target_parent_name:
@@ -138,7 +139,7 @@ def discover_remaining(settings, *, scope_dirs=None, recursive=False):
                     continue
                 if rel and not authorized(nfc(rel), scopes, recursive):
                     continue  # Transit ancestors do not grant file permission.
-                classification = classify_entry(name, info.st_mode)
+                classification = classify_entry(name, info.st_mode, legacy=True)
                 if not classification.included:
                     exclude('受保护文件')
                     continue
@@ -285,7 +286,7 @@ def validate_structure(settings, plan):
         expected_keys = {'kind', 'rel_path', 'source', 'identity'}
         if kind == 'file':
             expected_keys.update(('category', 'classification_basis'))
-            classification = classify_entry(rel.rsplit('/', 1)[-1], stat.S_IFREG)
+            classification = classify_entry(rel.rsplit('/', 1)[-1], stat.S_IFREG, legacy=True)
             if not classification.included or classification.category != c.get('category') or classification.basis != c.get('classification_basis'):
                 refuse('候选筛查或分类依据不符合当前规则')
             projected = project_identity(c.get('identity', {}), '候选身份')

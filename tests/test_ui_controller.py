@@ -92,7 +92,7 @@ class ControllerTests(SandboxTestCase):
         self.assertTrue(all(Path(op['source']).is_file() for op in c.plan['operations']))
 
     def test_collision_is_real_skip_and_target_is_not_overwritten(self):
-        target = self.sandbox.target_dir('安装包') / '人工.dmg'
+        target = self.sandbox.target_dir('安装包') / 'Mac 安装包（dmg pkg）' / '人工.dmg'
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(b'ARTIFICIAL CONFLICT')
         c = self.preview(('人工.dmg', '人工.pdf'))

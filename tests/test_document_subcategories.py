@@ -43,9 +43,9 @@ class DocumentSubcategoryTests(SandboxTestCase):
             "k.md": "Markdown", "l.MARKDOWN": "Markdown", "m.txt": "其他文档",
         }
         for name, subcategory in expected.items():
-            self.assertEqual(by_name[name]["document_subcategory"], subcategory)
+            self.assertEqual(by_name[name]["subfolder"], subcategory)
             self.assertIn(f"文档资料/{subcategory}/{name}", by_name[name]["dest"])
-        self.assertNotIn("document_subcategory", by_name["deep/inside.pdf"])
+        self.assertNotIn("subfolder", by_name["deep/inside.pdf"])
         self.assertTrue(by_name["deep/inside.pdf"]["dest"].endswith("文档资料/deep/inside.pdf"))
         self.assertEqual(by_name["csv.csv"]["category"], "代码与数据")
         self.assertEqual(by_name["unknown.xyz"]["category"], "待确认")
@@ -73,7 +73,7 @@ class DocumentSubcategoryTests(SandboxTestCase):
         plan = build_plan(self.sandbox.settings).plan
         tampered = copy.deepcopy(plan)
         op = next(item for item in tampered["operations"] if item["rel_path"] == "report.pdf")
-        op["document_subcategory"] = "Word"
+        op["subfolder"] = "Word"
         op["dest"] = op["dest"].replace("/PDF/", "/Word/")
         tampered["plan_hash"] = compute_plan_hash(tampered)
         write_plan(self.sandbox.settings, tampered)
@@ -101,9 +101,9 @@ class DocumentSubcategoryTests(SandboxTestCase):
             tampered = copy.deepcopy(original)
             op = tampered["operations"][0]
             if value == "missing":
-                op.pop("document_subcategory", None)
+                op.pop("subfolder", None)
             else:
-                op["document_subcategory"] = None
+                op["subfolder"] = None
             op["dest"] = op["dest"].replace("/PDF/", "/")
             tampered["plan_hash"] = compute_plan_hash(tampered)
             tampered_bytes = (json.dumps(tampered, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
@@ -158,9 +158,9 @@ class DocumentSubcategoryTests(SandboxTestCase):
             plan = copy.deepcopy(original)
             op = plan["operations"][0]
             if value == "missing":
-                op.pop("document_subcategory", None)
+                op.pop("subfolder", None)
             else:
-                op["document_subcategory"] = None
+                op["subfolder"] = None
             op["dest"] = op["dest"].replace("/PDF/", "/")
             plan["plan_id"] = f"{original['plan_id']}-{value}"
             plan["plan_hash"] = compute_plan_hash(plan)

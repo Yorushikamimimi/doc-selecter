@@ -220,6 +220,12 @@ def project_operation(operation: Mapping[str, Any], index: int, *,
         if value is not None and not isinstance(value, str):
             raise PlanHashError(f"{where}.document_subcategory 必须是字符串或 null")
         out["document_subcategory"] = None if value is None else normalize_text(value)
+    # Optional: old operations keep exactly their original projection.
+    if "subfolder" in operation:
+        value = operation["subfolder"]
+        if value is not None and not isinstance(value, str):
+            raise PlanHashError("operation.subfolder 必须是字符串或 null")
+        out["subfolder"] = normalize_text(value) if value is not None else None
     return out
 
 

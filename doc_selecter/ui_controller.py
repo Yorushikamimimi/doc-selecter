@@ -26,7 +26,7 @@ from .plan_hash import normalize_path
 from .planner import (PlanError, assert_new_move_admissible, build_plan, list_plans,
                       load_verified_plan, plan_path, public_plan_view, write_confirmation, write_plan)
 from .remaining_archive import build_remaining_plan, discover_remaining
-from .rules import CATEGORIES, document_subcategory, normalize_extension, redact_private_text
+from .rules import CATEGORY_SUBFOLDERS, decoded_filename, CATEGORIES, document_subcategory, normalize_extension, redact_private_text
 from .scanner import list_selectable_folders, normalize_scope
 from .snapshot import fold_verified_journals, read_snapshot
 from .undo import undo_plan
@@ -270,9 +270,9 @@ class Controller:
     def set_filter(self, category=None):
         with self._lock:
             self._require_idle()
-            if category is not None and category not in CATEGORIES:
+            if category is not None and category not in (*CATEGORIES, 'hints'):
                 raise RequestRefused('类别无效。')
-            self.filter = category
+            self.filter = None if category == 'hints' and self.filter == 'hints' else category
             return self.get_state()
 
     def list_folders(self):
@@ -670,6 +670,8 @@ class Controller:
         snap = {e['op_id']: e for e in (history.get('snapshot') or {}).get('entries', [])
                 + (history.get('snapshot') or {}).get('directory_entries', [])}
         rows = []
+        by_path = {op.get('rel_path'): op for op in public.get('operations', [])}
+        preview_time = self._plan_time(plan)
         for op in public.get('operations', []) + public.get('directory_operations', []):
             op_id = op['op_id']; result = history.get('execution', {}).get(op_id, {}).get('result') or {}
             outcome = result.get('outcome')
@@ -695,7 +697,24 @@ class Controller:
             elif plan is self.plan and op_id in self._preview_conflicts and self.preview_ready:
                 state, label = 'hint', '会跳过 · 同名已存在'
             name = op.get('rel_path') or os.path.basename(op['source'])
-            rows.append({'id': op_id, 'name': name, 'category': op.get('category', '原本空目录'),
+            display_name = os.path.join(os.path.dirname(name), decoded_filename(os.path.basename(name)))
+            hints = []
+            duplicate = re.fullmatch(r"(.+) \([0-9]+\)(\.[^/]+)", os.path.basename(name))
+            if duplicate:
+                original = duplicate.group(1) + duplicate.group(2)
+                other = by_path.get(os.path.join(os.path.dirname(name), original))
+                size = op.get('identity', {}).get('size_bytes')
+                if other and type(size) is int and size == other.get('identity', {}).get('size_bytes'):
+                    hints.append({'kind': 'duplicate', 'text': f'可能和「{decoded_filename(original)}」是同一个文件（大小一样）'})
+            mtime = op.get('identity', {}).get('mtime_ns')
+            if op.get('category') == '安装包' and preview_time is not None and type(mtime) is int:
+                days = (int(preview_time) * 1_000_000_000 - mtime) // 86_400_000_000_000
+                if days >= 30:
+                    hints.append({'kind': 'old_installer', 'text': f'放了 {days} 天，可能已经装过'})
+            if display_name != name:
+                hints.append({'kind': 'encoded', 'text': '名字是网页编码，这里显示成中文；文件本身的名字不变'})
+            rows.append({'id': op_id, 'name': name, 'display_name': display_name, 'hints': hints,
+                'subfolder': op.get('subfolder', op.get('document_subcategory')), 'category': op.get('category', '原本空目录'),
                 'source': self._public(op['source']), 'destination': self._public(op['dest']),
                 'to': self._public(os.path.dirname(os.path.relpath(op['dest'], settings.downloads_dir))),
                 'size': size_text(op.get('identity', {}).get('size_bytes', 0)),
@@ -811,7 +830,7 @@ class Controller:
     def get_state(self):
         with self._lock:
             rows = self._rows(self.plan, self.history)
-            shown = [r for r in rows if self.filter is None or r['category'] == self.filter]
+            shown = [r for r in rows if self.filter is None or (bool(r['hints']) if self.filter == 'hints' else r['category'] == self.filter)]
             counts = (self.plan or {}).get('category_totals', {}).get('counts', {})
             done = self.phase == 'done'
             count_rows = {c: {'count': sum(r['category'] == c and r['state'] == 'ok' for r in rows) if done else counts.get(c, 0),
@@ -822,7 +841,8 @@ class Controller:
             version = self.session.active[-1].parent if self.session.active else None
             return copy.deepcopy({'phase': self.phase, 'busy': self.busy, 'selected': self.selected,
                 'revision': self._revision, 'folder': self._public(os.path.basename(self.settings.downloads_dir)) if self.selected else '',
-                'categories': count_rows, 'filter': self.filter, 'rows': shown,
+                'categories': count_rows, 'category_subfolders': CATEGORY_SUBFOLDERS,
+                'hint_count': sum(bool(r['hints']) for r in rows), 'filter': self.filter, 'rows': shown,
                 'moved_count': sum(r['state'] == 'ok' for r in rows), 'total': sum(counts.values()), 'selected_count': len(rows), 'movable_count': len(rows) - collisions,
                 'skipped_count': collisions, 'excluded_count': (self.plan or {}).get('counts', {}).get('excluded', 0), 'plan_hash': (self.plan or {}).get('plan_hash'),
                 'banner': self.banner, 'error': self.error, 'can_organize': bool(can_organize),

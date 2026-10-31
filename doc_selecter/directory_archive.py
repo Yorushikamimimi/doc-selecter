@@ -14,7 +14,7 @@ from .atomic_move import (AtomicMover, DestinationExists, DirectoryIdentityChang
                          MoveFailed, OutOfScopeError, lstat_identity, assert_no_symlink_segments)
 from .journal import Journal, JournalCorrupted, JournalWriteFailed, make_event
 from .plan_hash import V3_HASH_ALG
-from .rules import (CATEGORIES, document_subcategory, normalize_extension,
+from .rules import (CATEGORIES, document_subcategory, file_subfolder, normalize_extension,
                     is_sensitive_relative_path, is_code_project_dir, classify_entry)
 
 LAYOUT_VERSION = 'empty-dir-slots-v1'
@@ -161,7 +161,8 @@ def validate_structure(settings, plan):
     from . import RULES_VERSION
     from .planner import normalized_dir_identity_map
     from .scanner import _classify_dir
-    if plan.get('schema_version') != 3 or plan.get('rules_version') != RULES_VERSION or plan.get('plan_hash_alg') != V3_HASH_ALG:
+    legacy = plan.get('rules_version') == 'milestone5-empty-dir-archive-r1'
+    if plan.get('schema_version') != 3 or plan.get('rules_version') not in {RULES_VERSION, 'milestone5-empty-dir-archive-r1'} or plan.get('plan_hash_alg') != V3_HASH_ALG:
         _error('v3 规则／布局／哈希版本不兼容')
     if plan.get('downloads_dir') != settings.canonical_downloads_dir or plan.get('target_root') != settings.canonical_target_root:
         _error('计划根与可信配置不一致')
@@ -182,7 +183,7 @@ def validate_structure(settings, plan):
         _error('范围字段非法')
     for s in scopes+actual:
         rel_ok(s,True)
-        if s and (any(not _classify_dir(p)[0] for p in s.split('/')) or s.split('/')[0]==settings.target_parent_name): _error('范围包含受保护目录')
+        if s and (any(not _classify_dir(p, legacy=legacy)[0] for p in s.split('/')) or s.split('/')[0]==settings.target_parent_name): _error('范围包含受保护目录')
     if not plan['recursive'] and (scopes != [''] or actual != ['']): _error('递归范围不一致')
     def in_scope(rel):
         return bool(plan['recursive'] and any(s and (rel == nfc(s) or rel.startswith(nfc(s)+'/')) for s in scopes))
@@ -200,13 +201,13 @@ def validate_structure(settings, plan):
         if op.get('kind') != 'file' or not re.fullmatch(r'op-[0-9]{4,}',op['op_id']): _error('文件操作 kind／ID 非法')
         rel = rel_ok(op.get('rel_path')); parent,_,name = rel.rpartition('/')
         if parent and not in_scope(parent): _error('文件不在明确扫描范围')
-        category = op.get('category'); sub = op.get('document_subcategory')
-        classification=classify_entry(name,stat.S_IFREG)
+        category = op.get('category'); sub = op.get('document_subcategory' if legacy else 'subfolder')
+        classification=classify_entry(name,stat.S_IFREG,legacy=legacy)
         if classification.status != 'included' or classification.category != category or classification.basis != op.get('classification_basis'):
             _error('文件类别／筛查／依据与固定规则不一致')
         if category not in plan['category_selection']: _error('文件类别不在授权集合')
-        expected_sub = document_subcategory(normalize_extension(name)) if category == '文档资料' and not parent else None
-        if expected_sub != sub or (expected_sub and not sub): _error('当前规则顶层文档缺少有效子类绑定')
+        expected_sub = (document_subcategory(normalize_extension(name)) if category == '文档资料' and not parent else None) if legacy else (file_subfolder(name, category) if not parent else None)
+        if expected_sub != sub or (not legacy and ('document_subcategory' in op or (expected_sub is None and 'subfolder' in op))) or (legacy and 'subfolder' in op): _error('当前规则缺少有效子类绑定')
         dest_rel = category+'/'+(sub+'/' if sub else '')+rel
         if op.get('source') != plan['downloads_dir']+'/'+rel or op.get('dest') != plan['target_root']+'/'+dest_rel:
             _error('固定文件目标被改写；不允许链接替代去向')
@@ -217,7 +218,7 @@ def validate_structure(settings, plan):
     for op in dirs:
         rel = rel_ok(op.get('rel_path')); parent,_,name = rel.rpartition('/')
         if (op.get('kind') != 'empty_directory' or not re.fullmatch(r'dir-[0-9]{4,}',op['op_id'])
-            or not in_scope(rel) or rel not in map(nfc,actual) or is_sensitive_relative_path(rel)
+            or not in_scope(rel) or rel not in map(nfc,actual) or is_sensitive_relative_path(rel, legacy=legacy)
             or rel.split('/')[0] == settings.target_parent_name): _error('目录不在归档授权范围')
         if op.get('parent_rel_path') != parent or op.get('source') != plan['downloads_dir']+'/'+rel:
             _error('目录原相对路径不一致')
