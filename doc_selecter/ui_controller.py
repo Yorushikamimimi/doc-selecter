@@ -6,6 +6,8 @@ no widget, browser object or caller-owned collection participates in admission.
 from __future__ import annotations
 
 import copy
+import dataclasses
+import datetime
 import hashlib
 import os
 import re
@@ -22,7 +24,7 @@ from .journal import JournalCorrupted, JournalNeedsRepair
 from .locking import read_plan_state
 from .plan_hash import normalize_path
 from .planner import (PlanError, assert_new_move_admissible, build_plan, list_plans,
-                      load_verified_plan, public_plan_view, write_confirmation, write_plan)
+                      load_verified_plan, plan_path, public_plan_view, write_confirmation, write_plan)
 from .remaining_archive import build_remaining_plan, discover_remaining
 from .rules import CATEGORIES, document_subcategory, normalize_extension, redact_private_text
 from .scanner import list_selectable_folders, normalize_scope
@@ -104,6 +106,7 @@ class Controller:
         self._preview_conflicts = set()
         self._running_row = None
         self._can_open = False
+        self._past_refs = {}
         self.watcher = NewFileWatcher(**({'clock': clock} if clock else {}))
 
     def _public(self, value):
@@ -701,8 +704,78 @@ class Controller:
                 'state': state, 'label': label, 'reason': reason})
         return rows
 
+    @staticmethod
+    def _plan_time(plan):
+        try:
+            return datetime.datetime.strptime(plan['created_at'], '%Y-%m-%dT%H:%M:%S%z').timestamp()
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def _step_time(self, step):
+        try:
+            return self._plan_time(load_verified_plan(step.settings, step.plan_id, display_only=True))
+        except (OSError, ValueError, RuntimeError):
+            return None
+
+    def _past_settings(self, plan):
+        # Display only: earlier runs may belong to another source folder.
+        return dataclasses.replace(self._base, downloads_dir=plan['downloads_dir'])
+
+    def _past_runs(self):
+        """Organized plans from earlier launches, newest first. Read-only: no undo credentials."""
+        current = {s.plan_id for s in self.session.steps}
+        here = self.settings.canonical_downloads_dir if self.selected else None
+        runs, self._past_refs = [], {}
+        for plan_id in reversed(list_plans(self._base)):
+            if plan_id in current:
+                continue
+            try:
+                plan = load_verified_plan(self._base, plan_id, display_only=True)
+                settings = self._past_settings(plan)
+                history = read_history(settings, plan)
+            except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+                continue
+            if not history['consumed']:
+                continue
+            counts = history['state'].get('counts') or {}
+            outcomes = [(v.get('result') or {}).get('outcome') for v in history['execution'].values()]
+            moved = max(int(counts.get('moved', 0)), outcomes.count('moved'))
+            failed = int(counts.get('failed', 0))
+            if history['phase'] == 'undone':
+                status = 'undone'
+            elif history['error'] or history['phase'] in {'corrupted', 'needs_review', 'unknown_needs_review',
+                    'aborted_log_failure', 'aborted_global', 'executing', 'undoing', 'locked'}:
+                status = 'check'
+            else:
+                status = 'partial' if failed else 'kept'
+            try:
+                written = os.stat(plan_path(self._base, plan_id)).st_mtime_ns
+            except OSError:
+                written = 0
+            ref = hashlib.sha256((self._nonce + plan_id).encode()).hexdigest()[:24]
+            self._past_refs[ref] = plan_id
+            runs.append({'ref': ref, 'at': self._plan_time(plan), 'status': status,
+                'kind': 'archive' if plan.get('plan_type') == 'remaining_archive' else 'organize',
+                'source': self._public(os.path.basename(plan['downloads_dir'].rstrip('/'))),
+                'here': plan['downloads_dir'] == here, 'moved': moved,
+                'archived': outcomes.count('archived'), 'skipped': int(counts.get('skipped', 0)),
+                'failed': failed, '_order': (self._plan_time(plan) or 0, written)})
+        # Plan ids only resolve to the second; the plan file write time breaks ties.
+        runs.sort(key=lambda r: r.pop('_order'), reverse=True)
+        return runs
+
     def get_history(self, version=None):
         with self._lock:
+            if isinstance(version, str):
+                plan_id = self._past_refs.get(version)
+                if plan_id is None:
+                    raise RequestRefused('操作记录不存在。')
+                plan = load_verified_plan(self._base, plan_id, display_only=True)
+                settings = self._past_settings(plan)
+                history = read_history(settings, plan)
+                return self._public_tree({'rows': self._rows(plan, history, settings),
+                    'at': self._plan_time(plan), 'source': os.path.basename(plan['downloads_dir'].rstrip('/')),
+                    'execution': history['execution'], 'undo': history['undo']})
             if version is not None:
                 if type(version) is not int:
                     raise RequestRefused('操作记录不存在。')
@@ -721,9 +794,9 @@ class Controller:
                     'source': self._public(step.settings.downloads_dir), 'moved': step.moved,
                     'archived_dirs': step.archived_dirs, 'skipped': step.skipped, 'failed': step.failed,
                     'uncertain': step.uncertain, 'detail': self._public(step.detail),
-                    'active': step in self.session.active, 'checked': step.checked,
+                    'active': step in self.session.active, 'checked': step.checked, 'at': self._step_time(step),
                     'token': self._token(step.version)})
-            return {'steps': steps, 'head': self.session.head, 'root_token': self._token(0),
+            return {'steps': steps, 'past': self._past_runs(), 'head': self.session.head, 'root_token': self._token(0),
                     'current_token': self._token(None)}
 
     def get_details(self):

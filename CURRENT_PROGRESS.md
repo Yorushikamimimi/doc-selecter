@@ -8,7 +8,7 @@
 - **版本**：实现提交 `472551b29690f4f3d9d93b89dad296e95f163845` 已推送main，注释tag v0.1.0精确指向该提交，GitHub标记prerelease、非draft。README下载入口和本条发布记录随文档另行提交；实际最新HEAD以Git为准。公开维护仅在doc-selecter，不同步扩展旧private项目。
 - **独立验证**：主控最终后台449项failure/error/skip=0，总642 ID、193 GUI未运行；原625 ID、旧断言和37份兼容夹具保留。22当前模块与两入口直接核对实际冻结字节码，148模块与验证副本等价。5 Mach-O arm64、12内部链接、许可／签名／清单hash正常；无外部Python依赖的未插桩启动、搬迁、LaunchServices、DMG挂载复制启动通过。
 - **往返与生命周期**：独立本地钩子冻结副本三人工文件双取消、移动／撤销、原名位置／五身份／字节、日志healthy及计划／确认不可变通过。1.5秒I/O期间约208.6ms关闭、心跳21.1ms、后台自然结束。不是用户原生点击证明。未访问真实Downloads／状态／备份或操作用户安装App／窗口。
-- **发布核对**：Release四附件从GitHub重新下载，与本地主控验证最终材料逐字一致；SHA256SUMS及GitHub各附件digest匹配。DMG SHA256为cecc6256ddbbebf19cc1e1511bf79e5081e8f36858c082413ca569e849b3ffa4。最终材料在忽略目录build/release/preview-0.1.0-release-text-144f；原始主控证据本地保留，不随公开附件上传。
+- **发布核对**：Release四附件从GitHub重新下载，与本地主控验证最终材料逐字一致；SHA256SUMS及GitHub各附件digest匹配。DMG SHA256为cecc6256ddbbebf19cc1e1511bf79e5081e8f36858c082413ca569e849b3ffa4。最终材料在忽略目录build/release.noindex/preview-0.1.0-release-text-144f；原始主控证据本地保留，不随公开附件上传。
 - **本人首次启动（2026-10-30）**：Tian从GitHub网页下载DMG，复制到桌面（未放入应用程序、未替换旧App），首次双击被Gatekeeper以“无法验证开发者”拦截，经「隐私与安全性」对该App点「仍要打开」后正常启动到首屏（来源未选）。据本人口述及首屏截图；DMG校验和未由本人核对，整理／撤销等功能尚未试用，不是验收通过。
 - **支持边界**：仅Apple Silicon arm64，最低构建声明11.0、实测只有macOS27.0（26A428）；网络下载后会被Gatekeeper拦截、需本人逐App放行（见上条），无其他Mac／旧系统或本人成品验收证明。ad-hoc及资源封印，无Developer ID／公证，不绕过系统安全设置；名称启发式、外部竞态及条件撤销限制继续保留。
 - **Tk界面改版（2026-10-30，已被路线B取代，作为 `--tk` 备用）**：Tian试用反馈①选文件夹后自动载入只预览未整理的旧方案并红字报“失效”②界面不好看。已改：只自动恢复已整理／需检查的方案（`gui_session.latest_restorable_plan`＋tests/test_plan_restore.py）；方向B左右分栏版（外派实施）＋主控文案修正与精修（自动预览、短确认框、去完成弹窗、固定安全底栏）。后台455、Tk GUI176过（主控在沙盒集中跑）。Tian走查：大体可以，但按钮灰底块仍在（Aqua下ttk不认样式背景色）、缺动态感。2026-10-31 随路线B一并提交。
@@ -17,6 +17,9 @@
 - **三个面板（2026-10-31 主控实现）**：按已认可稿 build/design/panels-draft-2026-10-30.html 改 webui/app.js、app.css：跳过原因／详情／操作记录改为右侧抽屉（分组卡片、短路径＋悬停全路径、可展开明细行、分段切换、时间线）；确认框仍走顶部 sheet；「恢复和检查」只在需检查的版本出现；原始记录收进自绘展开项。验证：后台485过；ego-browser Space 67 用假数据页看过浅色／深色、三个面板、从抽屉进确认框与Esc关闭；修了抽屉在屏外时聚焦导致主区横向滚动。与稿差异：隐藏和临时文件按扫描原因分组显示，没有合并成一组。
 - **Tian走查（2026-10-31）**：主控用临时沙盒 /private/tmp/docsel-walk-kdT9uF（虚构文件，状态写在沙盒内）从源码启动网页版，Tian亲手走查后答复「都可以」，即路线B界面含①②与三个面板通过本人走查。
 - **提交（2026-10-31）**：经Tian授权，按Tk改版／网页界面与打包／文档三组提交（86fcbe1、b55157b、6508862），已推送 main。
+- **本地新包（2026-10-31）**：Tian发现已装App仍是v0.1.0旧界面（新界面只在源码）。主控用原隔离构建环境从 016ea85 构建到忽略目录 build/release.noindex/local-webui-20261031-016ea85（App＋DMG，版本号仍写0.1.0）。验证：codesign深度严格校验过、包内三个网页资源与源码逐字一致、含pywebview；未启动、未安装、未替换已装App。之后Tian自己双击打开并在真实Downloads实操整理88个文件，反馈没发现问题。
+- **长期操作记录（2026-10-31 主控实现，Tian装新包实看后验收通过）**：按已认可稿改 ui_controller.py（get_history 新增 past：读状态目录里已整理过的方案，按时间新到旧，只读、无撤销凭证；get_history(字符串ref) 看旧明细）、webui/app.js、app.css（「这次打开」＋「更早 · 只能查看」，按天分组、30天外按月、显示更早、这个文件夹／所有文件夹）。验证：新增2项测试，后台487过；临时沙盒造3次真实整理（含一次撤销），在 ego-browser 用真实数据看了列表、显示更早、切所有文件夹、深色明细。修了同一秒内两次整理排序不稳的问题。新本地包 build/release.noindex/local-history-20261031（签名校验过，包内资源与源码一致），Tian已拖进「应用程序」（核对代码与源码一致）。构建产物统一放 build/release.noindex（聚焦搜索不索引），以后本地打包用 --output-dir 指到这里。经Tian授权单独提交，未推送。
+- **分类细化＋三个提示（2026-10-31）**：效果稿 build/design/classify-draft-2026-10-31.html 已获Tian认可（学校课程放文档资料下、压缩包不按主题分、代码与数据不细分、音视频分手机视频／视频／音频）。Tian决定外派给Codex，前端必须严格按规范，报告由主控验收。提示词 build/handoff/classify-executor-prompt.md。等执行者报告；老文件不挪。
 - **下一步**：发布需授权；发新版前按 public-release-readiness 检查新增暴露面。新旧App共用状态目录，勿同时打开。
 
 ### 主控发布保存记录（2026-10-15）
@@ -40,11 +43,11 @@
 - 运行独立性：未插桩候选的真实冻结入口，在干净环境、最小PATH、不同cwd、仓库外中文／空格／特殊路径及无效PYTHONHOME／PYTHONPATH／TCL_LIBRARY／TK_LIBRARY下隐藏到达mainloop。sys.executable／sys.path、当前模块、Tk脚本／扩展及实际非系统动态库均来自App或系统，未使用个人Python、venv或repo。未选来源、无计划、自动检查关闭，人工文件与状态未操作；重复启动拒绝第二窗口，关闭后可重开；损坏副本内置Tk数据的诊断通过。
 - GUI证据层次：三文件预览／整理取消／明确确认移动／撤销取消／还原通过，五身份、字节、原目录身份、目标不存在、两日志healthy、计划及确认字节不变。该往返使用仅本地的测试钩子冻结副本，源码hash／运行时pin与候选相同；正式候选不含钩子／测试／夹具。程序化弹窗回答非原生人工点击。另一隐藏冻结副本注入1.5秒准备I/O，关闭回调约201ms、返回约212ms，后台自然结束，不join或强杀。
 - 分发审查：候选只包含当前22模块的冻结代码、148个分析后的运行模块、标准运行数据、ICNS及许可证；全部5个真实Mach-O为arm64，12处链接均在包内，加载依赖只指向包或系统。最低系统声明11.0、实测27.0（26A428）；不能声称旧系统或跨机通过。两个出现的/Users/Barney字符串来自CPython ntpath人工文档示例，不是个人路径或凭证；代码对象中无当前开发者／构建沙盒路径。源头元数据额外的zlib-ng许可引用按同commit构建源码核对，macOS Tcl使用SDK zlib，实际许可文本保留，不虚构该组件。
-- 产物：忽略目录build/release/candidate-0.1.0-final中生成App、可挂载DMG、SHA256SUMS、逐文件清单和拟Release说明；版本均0.1.0，依据接手时无tag／Release。DMG挂载／只读内容hash／Applications入口／复制到人工路径后的冻结启动／校验和／卸载通过，不在镜像写状态、不安装。独立新venv重复构建成功，同源及同运行时pin；三个归档／签名文件字节不同，未宣称确定性构建。
+- 产物：忽略目录build/release.noindex/candidate-0.1.0-final中生成App、可挂载DMG、SHA256SUMS、逐文件清单和拟Release说明；版本均0.1.0，依据接手时无tag／Release。DMG挂载／只读内容hash／Applications入口／复制到人工路径后的冻结启动／校验和／卸载通过，不在镜像写状态、不安装。独立新venv重复构建成功，同源及同运行时pin；三个归档／签名文件字节不同，未宣称确定性构建。
 - 失败尝试及限制：首次人工根的Downloads／downloads在大小写不敏感文件系统冲突，保留现场后另建新根；两处猜测的官方资料路径404，改用固定源commit树和构建脚本；严格审查曾把LC_ID_DYLIB当成加载依赖，改为明确区分后真实加载命令通过，错误记录保留。全部原始日志／清单／人工数据／原生诊断／许可来源证据仅留本地，绝对路径见执行交付，不进入公开仓库。
 - 主控独立复验（2026-10-15）：已只读核对主控controller-summary，结论“程序化独立复验通过；待发布文案收尾与最终产物复核”。独立447项failure/error/skip=0，原625ID与旧源码／测试／37份夹具保留；22当前模块、两启动入口及148模块字节码比对通过，5 Mach-O arm64、12内部链接、许可／签名／清单／hash和未插桩启动／搬迁／LaunchServices／DMG复制启动通过。本地钩子副本三文件双取消及还原、身份／字节／日志／不可变证据通过，1.5秒I/O关闭约208.6ms、心跳21.1ms。此为主控独立证据，区别于上列执行侧测试，不扩大到跨机、旧系统、互联网Gatekeeper或用户原生操作。
 - 发布说明收尾（执行侧，2026-10-15）：仅scripts/build_distributable.py的Release说明及DMG说明改成长期有效的“0.1.0公开预览版”，保留arm64、最低声明11.0／仅实测27.0、无Developer ID／公证、跨机／Gatekeeper／原生未验证及核对官方Release与校验和说明。README未改，正式Release出现前仍不提供虚构下载链接。新增2项文案回归，17项针对性测试failure/error/skip=0；原640 ID（含最初625）及原断言保留，总642；本轮未重跑完整后台或193 GUI项，不借主控447结果冒充本轮新测。
-- 最新待发布材料：独占新目录build/release/preview-0.1.0-release-text-144f/，含dist/文件整理助手.app、doc-selecter-0.1.0-macos-arm64.dmg、SHA256SUMS、build-manifest.json和release-notes.md，未覆盖旧候选。22源码、两启动入口、许可证、固定依赖和图标不变；148冻结模块和两入口字节码与已验候选一致。重建App仅FileOrganizer可执行、base_library.zip和CodeResources三个归档／签名文件字节变化，属于已知非确定性重建；没有新增App业务内容。签名深度严格校验、包内依赖审查、DMG只读挂载清单／App逐文件hash／说明文案／校验和／卸载通过，额外仅一次隐藏诊断启动，无可见窗口或文件操作。执行侧新证据仅本地保留，绝对路径见交付，不写公开原始日志。
+- 最新待发布材料：独占新目录build/release.noindex/preview-0.1.0-release-text-144f/，含dist/文件整理助手.app、doc-selecter-0.1.0-macos-arm64.dmg、SHA256SUMS、build-manifest.json和release-notes.md，未覆盖旧候选。22源码、两启动入口、许可证、固定依赖和图标不变；148冻结模块和两入口字节码与已验候选一致。重建App仅FileOrganizer可执行、base_library.zip和CodeResources三个归档／签名文件字节变化，属于已知非确定性重建；没有新增App业务内容。签名深度严格校验、包内依赖审查、DMG只读挂载清单／App逐文件hash／说明文案／校验和／卸载通过，额外仅一次隐藏诊断启动，无可见窗口或文件操作。执行侧新证据仅本地保留，绝对路径见交付，不写公开原始日志。
 - 停点：发布说明收尾完成，待主控最终产物核对后发布；已验证、尚未提交。main／c92c0fde983d7849820c28ce669b47a5e4f23bc8，主控既有交接节已保留／原位更新，未commit/push、未创建正式tag或Release、未替换／操作已安装App或旧私有项目。候选有本地ad-hoc签名及资源封印，无Developer ID／公证；另一台干净Mac、其他系统、网络隔离／Gatekeeper、用户原生点击仍未验证。主控独立通过后才正式发布与用户体验，不自动推进。
 
 

@@ -246,6 +246,32 @@ class ControllerTests(SandboxTestCase):
         with self.assertRaises(ui.RequestRefused): c.return_to(0,h['root_token'],True)
         self.assertTrue((self.sandbox.target_dir('文档资料')/'PDF/人工.pdf').is_file())
 
+    def test_earlier_runs_survive_restart_as_view_only_records(self):
+        c = self.preview(('人工.pdf',)); self.organize(c)
+        c.undo(c.get_state()['undo_token'], True); c.wait_idle()
+        self.sandbox.add_file('第二份.pdf', b'ARTIFICIAL-2'); c.preview(); c.wait_idle(); self.organize(c)
+        c.wait_idle(); c.close()
+        later = self.controller(); later.select_source(str(self.sandbox.downloads)); later.wait_idle()
+        before = self.state_bytes()
+        h = later.get_history()
+        self.assertEqual(h['steps'], [])
+        self.assertEqual([(p['status'], p['moved'], p['here']) for p in h['past']],
+                         [('kept', 2, True), ('undone', 1, True)])
+        self.assertTrue(all(p['at'] for p in h['past']))
+        self.assertTrue(all(set(p) == {'ref', 'at', 'status', 'kind', 'source', 'here', 'moved',
+                                       'archived', 'skipped', 'failed'} for p in h['past']))
+        d = later.get_history(h['past'][0]['ref'])
+        self.assertEqual(sorted(r['name'] for r in d['rows']), ['人工.pdf', '第二份.pdf'])
+        self.assertEqual({r['state'] for r in d['rows']}, {'ok'})
+        self.assertEqual(before, self.state_bytes())
+        with self.assertRaises(ui.RequestRefused): later.get_history('not-a-record')
+        self.assertTrue((self.sandbox.target_dir('文档资料')/'PDF/第二份.pdf').is_file())
+
+    def test_unorganized_previews_are_not_listed_as_earlier_runs(self):
+        c = self.preview(('人工.pdf',)); c.wait_idle(); c.close()
+        later = self.controller()
+        self.assertEqual(later.get_history()['past'], [])
+
     def test_history_has_full_read_only_rows_for_each_version(self):
         c = self.preview(('人工.pdf',)); self.organize(c)
         before = self.state_bytes()
