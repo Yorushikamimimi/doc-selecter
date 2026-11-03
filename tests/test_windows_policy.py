@@ -130,6 +130,23 @@ class WindowsMoveBoundaryTests(unittest.TestCase):
         self.assertEqual(native.RENAME.FileName.offset, 20)
         self.assertEqual(ctypes.sizeof(native.OBJECT_ATTRIBUTES), 48)
 
+    def test_native_rename_buffer_binds_directory_and_no_replace_flag(self):
+        name = '人工文件.pdf'
+        encoded = name.encode('utf-16-le')
+        def invoke(handle, status, buffer, length, kind):
+            record = native.RENAME.from_buffer_copy(buffer)
+            self.assertEqual((handle, kind, record.RootDirectory), (7, 10, 9))
+            self.assertEqual(record.Flags, 0)
+            self.assertEqual(record.FileNameLength, len(encoded))
+            self.assertGreaterEqual(length, ctypes.sizeof(native.RENAME) + len(encoded))
+            offset = native.RENAME.FileName.offset
+            self.assertEqual(bytes(buffer[offset:offset + len(encoded)]), encoded)
+            self.assertEqual(bytes(buffer[offset + len(encoded):offset + len(encoded) + 2]), b'\0\0')
+            return 0
+        ntdll = SimpleNamespace(NtSetInformationFile=invoke)
+        with patch.object(native, 'api', return_value=(None, ntdll)):
+            native.rename(7, SimpleNamespace(handle=9), name)
+
     def test_directory_flush_never_silently_succeeds(self):
         from doc_selecter.windows.io import os as windows_os
         with self.assertRaises(OSError):

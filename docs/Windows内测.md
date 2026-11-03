@@ -22,7 +22,7 @@
 `doc_selecter/windows/` 是独立后端。共享模块只在 `os.name == 'nt'` 时使用它，不替换全局 `os`，Darwin 仍使用原有库与原语。
 
 - `NtCreateFile` 使用父句柄＋单段名称，配合 `OBJ_DONT_REPARSE`、`FILE_OPEN_REPARSE_POINT`；持有祖先目录句柄且不共享 DELETE 权限。
-- `SetFileInformationByHandle(FileRenameInfo)` 对已核验的源句柄移动，目标是已持有的目录句柄；覆盖标志为 false。最终调用前重核源的卷序列号、128 位 File ID、大小、修改时间和类型。
+- `NtSetInformationFile(FileRenameInformation)` 对已核验的源句柄移动，目标是已持有的目录句柄；覆盖标志为 false。最终调用前重核源的卷序列号、128 位 File ID、大小、修改时间和类型。
 - `windows.io` 仅适配现有引擎使用的文件系统操作。目录对象不是 CRT 文件描述符；文件描述符仍是真实 CRT fd，并持有父链。
 - 不读取用户文件正文获得身份。128 位 File ID 保留为 Python 整数；JS 不负责计算身份或计划哈希。
 - Windows 计划的 `platform=windows-ntfs-v1` 参与哈希；原 macOS 计划投影不变。计划、确认、intent/result、撤销和恢复沿用现有引擎。
@@ -79,7 +79,7 @@ python -B scripts/prepare_windows_build.py --output-dir build/windows-env
 
 ## 官方接口依据
 
-- [FILE_RENAME_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_rename_info)
+- [FILE_RENAME_INFORMATION](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)、[NtSetInformationFile](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntsetinformationfile)
 - [NtCreateFile](https://learn.microsoft.com/en-us/windows/win32/api/winternl/nf-winternl-ntcreatefile)、[OBJECT_ATTRIBUTES](https://learn.microsoft.com/en-us/windows/win32/api/ntdef/ns-ntdef-_object_attributes)
 - [FILE_ID_INFO](https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-file_id_info)、[LockFileEx](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-lockfileex)
 - [WebView2 分发与检测](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution)

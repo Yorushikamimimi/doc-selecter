@@ -84,7 +84,6 @@ def api():
         'CreateFileW': ([C.c_wchar_p, U32, U32, HANDLE, U32, U32, HANDLE], HANDLE),
         'CloseHandle': ([HANDLE], C.c_int),
         'GetFileInformationByHandleEx': ([HANDLE, C.c_int, HANDLE, U32], C.c_int),
-        'SetFileInformationByHandle': ([HANDLE, C.c_int, HANDLE, U32], C.c_int),
         'GetVolumeInformationByHandleW': ([HANDLE, C.c_wchar_p, U32, C.POINTER(U32), C.POINTER(U32), C.POINTER(U32), C.c_wchar_p, U32], C.c_int),
         'GetDriveTypeW': ([C.c_wchar_p], U32),
         'GetFinalPathNameByHandleW': ([HANDLE, C.c_wchar_p, U32, U32], U32),
@@ -96,6 +95,8 @@ def api():
     n.NtCreateFile.argtypes = [C.POINTER(HANDLE), U32, C.POINTER(OBJECT_ATTRIBUTES), C.POINTER(IO_STATUS_BLOCK),
                               HANDLE, U32, U32, U32, U32, HANDLE, U32]
     n.NtCreateFile.restype = C.c_int32
+    n.NtSetInformationFile.argtypes = [HANDLE, C.POINTER(IO_STATUS_BLOCK), HANDLE, U32, C.c_int]
+    n.NtSetInformationFile.restype = C.c_int32
     n.RtlNtStatusToDosError.argtypes = [C.c_int32]; n.RtlNtStatusToDosError.restype = U32
     _api = k, n
     return _api
@@ -259,15 +260,24 @@ def names(directory):
 def rename(handle, target_directory, name, *, replace=False):
     component(name)
     encoded = name.encode('utf-16-le')
-    length = max(C.sizeof(RENAME), RENAME.FileName.offset + len(encoded))
+    # Include the complete ABI struct plus trailing name storage/NUL padding.
+    length = C.sizeof(RENAME) + len(encoded)
     buffer = C.create_string_buffer(length)
     record = RENAME.from_buffer(buffer)
     record.Flags = int(replace)
     record.RootDirectory = target_directory.handle
     record.FileNameLength = len(encoded)
     C.memmove(C.addressof(buffer) + RENAME.FileName.offset, encoded, len(encoded))
-    if not api()[0].SetFileInformationByHandle(handle, 3, buffer, length):
-        raise error()
+    # Use the native relative-handle API without Win32 path conversion.
+    status = IO_STATUS_BLOCK()
+    n = api()[1]
+    result = n.NtSetInformationFile(handle, C.byref(status), buffer, length, 10)
+    if result < 0:
+        failure = error(n.RtlNtStatusToDosError(result))
+        failure.ntstatus = result & 0xffffffff
+        raise failure
+    if result != 0:
+        raise RuntimeError('重命名返回非完成状态，需恢复检查。')
 
 
 def lock(handle, *, unlock=False):

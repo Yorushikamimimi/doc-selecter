@@ -20,7 +20,13 @@ class DiagnosticResult(unittest.TextTestResult):
             path = Path(frame.filename)
             if path.is_relative_to(REPO):
                 frames.append(f'{path.relative_to(REPO).as_posix()}:{frame.lineno}:{frame.name}')
-        print(json.dumps({'test': test.id(), 'error': err[0].__name__,
+        causes = []
+        cause = err[1].__cause__
+        while cause is not None and len(causes) < 5:
+            causes.append({'error': type(cause).__name__, 'winerror': getattr(cause, 'winerror', None),
+                           'ntstatus': getattr(cause, 'ntstatus', None)})
+            cause = cause.__cause__
+        print(json.dumps({'test': test.id(), 'error': err[0].__name__, 'causes': causes,
                           'winerror': getattr(err[1], 'winerror', None),
                           'errno': getattr(err[1], 'errno', None), 'frames': frames}, ensure_ascii=True))
 
