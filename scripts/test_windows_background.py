@@ -6,9 +6,31 @@ import os
 from pathlib import Path
 import sys
 import tempfile
+import traceback
 import unittest
 
 REPO = Path(__file__).resolve().parents[1]
+
+
+class DiagnosticResult(unittest.TextTestResult):
+    """Only source locations/codes go to CI; no exception text or fake inventory."""
+    def _diagnostic(self, test, err):
+        frames = []
+        for frame in traceback.extract_tb(err[2]):
+            path = Path(frame.filename)
+            if path.is_relative_to(REPO):
+                frames.append(f'{path.relative_to(REPO).as_posix()}:{frame.lineno}:{frame.name}')
+        print(json.dumps({'test': test.id(), 'error': err[0].__name__,
+                          'winerror': getattr(err[1], 'winerror', None),
+                          'errno': getattr(err[1], 'errno', None), 'frames': frames}, ensure_ascii=True))
+
+    def addError(self, test, err):
+        super().addError(test, err)
+        self._diagnostic(test, err)
+
+    def addFailure(self, test, err):
+        super().addFailure(test, err)
+        self._diagnostic(test, err)
 
 
 def main(receipt):
@@ -24,7 +46,7 @@ def main(receipt):
     suite = unittest.defaultTestLoader.loadTestsFromNames([
         'tests.test_windows_policy', 'tests.windows_native_checks'])
     with (root / 'records/background.log').open('x', encoding='utf-8') as log:
-        result = unittest.TextTestRunner(stream=log, verbosity=2).run(suite)
+        result = unittest.TextTestRunner(stream=log, verbosity=2, resultclass=DiagnosticResult).run(suite)
     spec = importlib.util.spec_from_file_location('windows_builder', REPO / 'scripts/build_windows_distributable.py')
     builder = importlib.util.module_from_spec(spec); spec.loader.exec_module(builder)
     summary = {'run': result.testsRun, 'failure': len(result.failures), 'error': len(result.errors),
@@ -40,7 +62,7 @@ def main(receipt):
         # Print test IDs and exception classes only; raw paths/logs remain local.
         for test, trace in result.failures + result.errors:
             print(test.id(), trace.splitlines()[-1].split(':', 1)[0])
-        print('原始诊断仅保留在本次人工沙盒 records 中。')
+        print('Raw diagnostics remain in this artificial sandbox only.')
     return 0 if summary['successful'] else 1
 
 

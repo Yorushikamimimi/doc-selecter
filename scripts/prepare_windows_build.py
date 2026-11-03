@@ -36,24 +36,24 @@ def prepare(output, archive=None):
                 raise RuntimeError('运行时归档含不支持的成员。')
         src.extractall(runtime, filter='data')
     python = runtime / 'python/python.exe'
-    subprocess.run([str(python), '-I', '-B', '-c',
+    subprocess.run([str(python), '-I', '-X', 'utf8', '-B', '-c',
                     "import sys; assert sys.version.split()[0] == " + repr(lock['python_version'])], check=True)
     venv = output / 'venv'
-    subprocess.run([str(python), '-I', '-B', '-m', 'venv', str(venv)], check=True)
+    subprocess.run([str(python), '-I', '-X', 'utf8', '-B', '-m', 'venv', str(venv)], check=True)
     executable = venv / 'Scripts/python.exe'
     backend = output / 'backend-requirements.txt'
     backend.write_text(''.join(line + '\n' for line in
         (REPO / 'packaging/requirements-windows-build.txt').read_text().splitlines()
         if line.startswith('setuptools==')), encoding='utf-8')
-    subprocess.run([str(executable), '-I', '-B', '-m', 'pip', '--isolated', 'install',
+    subprocess.run([str(executable), '-I', '-X', 'utf8', '-B', '-m', 'pip', '--isolated', 'install',
                     '--no-cache-dir', '--only-binary=:all:', '--require-hashes', '-r', str(backend)], check=True)
-    subprocess.run([str(executable), '-I', '-B', '-m', 'pip', '--isolated', 'install',
+    subprocess.run([str(executable), '-I', '-X', 'utf8', '-B', '-m', 'pip', '--isolated', 'install',
                     '--no-cache-dir', '--only-binary=:all:', '--no-binary=proxy-tools',
                     '--no-build-isolation', '--require-hashes', '-r',
                     str(REPO / 'packaging/requirements-windows-build.txt')], check=True)
     # No personal path is included in the published manifest; this is local only.
     (output / 'runtime-lock.json').write_text(json.dumps(lock, indent=2), encoding='utf-8')
-    print('Windows 隔离构建环境已准备。')
+    print('Pinned Windows build environment is ready.')
     return executable
 
 

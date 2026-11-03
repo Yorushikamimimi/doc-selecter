@@ -139,7 +139,7 @@ coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='FileOrgan
 ''', encoding='utf-8')
     env = os.environ.copy()
     env['PYINSTALLER_CONFIG_DIR'] = str(output / 'pyinstaller-cache')
-    subprocess.run([sys.executable, '-I', '-B', '-m', 'PyInstaller', '--noconfirm',
+    subprocess.run([sys.executable, '-I', '-X', 'utf8', '-B', '-m', 'PyInstaller', '--noconfirm',
         '--distpath', str(output / 'dist'), '--workpath', str(output / 'work'), str(spec)],
         cwd=stage, env=env, check=True)
     folder = output / 'dist/FileOrganizer'
@@ -169,7 +169,7 @@ coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='FileOrgan
                 target.write(path, 'FileOrganizer/' + path.relative_to(folder).as_posix())
     (output / 'SHA256SUMS').write_text(''.join(digest(p) + '  ' + p.name + '\n'
         for p in (archive, manifest)), encoding='utf-8')
-    print('Windows 无签名内测 ZIP 已构建；原生窗口未验收。')
+    print('Unsigned Windows preview ZIP built; native GUI acceptance remains pending.')
     return archive
 
 
