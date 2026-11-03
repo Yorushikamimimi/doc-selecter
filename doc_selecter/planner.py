@@ -195,7 +195,9 @@ def assert_new_move_admissible(settings: Settings, plan: dict[str, Any], *, stru
     不信任配置/计划自述的版本；当前版本也逐项检查实际名称。
     """
     if plan.get("schema_version") == 4:
-        from .remaining_archive import validate_structure
+        from .remaining_archive import RULES_VERSION as REMAINING_RULES, validate_structure
+        if plan.get('rules_version') != REMAINING_RULES:
+            raise MoveAdmissionRefused('剩余归档规则已过期，请重新预览；历史撤销/恢复仍可使用。')
         validate_structure(settings, plan)
         if not plan['remaining_selection']:
             raise MoveAdmissionRefused('尚未明确勾选任何剩余项目，不能确认或执行归档。')
@@ -252,7 +254,7 @@ def assert_new_move_admissible(settings: Settings, plan: dict[str, Any], *, stru
             relatives.append(relative(path[len(root) + 1:]))
         if any(is_sensitive_relative_path(rel) for rel in relatives):
             raise MoveAdmissionRefused("计划含当前筛查规则应跳过的项，请重新生成预览并确认。")
-        classification = classify_entry(name, stat.S_IFREG)
+        classification = classify_entry(name, stat.S_IFREG, top_level=not rel_dir)
         expected_subcategory = file_subfolder(name, category) if not rel_dir else None
         if (classification.status != "included" or classification.category != category
                 or classification.basis != op.get("classification_basis")
@@ -390,8 +392,8 @@ def load_plan(settings: Settings, plan_id: str) -> dict[str, Any]:
 def assert_plan_format_supported(plan: dict[str, Any]) -> None:
     """计划格式版本必须与当前实现兼容（旧格式明确拒绝，不静默改语义）。"""
     version = plan.get("schema_version")
-    from .remaining_archive import RULES_VERSION as REMAINING_RULES
-    supported = {2: {"milestone4-privacy-r11", "milestone5-document-subcategories-r1"}, 3: {RULES_VERSION, "milestone5-empty-dir-archive-r1"}, 4: {REMAINING_RULES}}
+    from .remaining_archive import RULES_VERSION as REMAINING_RULES, LEGACY_RULES_VERSION as OLD_REMAINING_RULES
+    supported = {2: {"milestone4-privacy-r11", "milestone5-document-subcategories-r1"}, 3: {RULES_VERSION, "milestone6-finer-subfolders-r1", "milestone5-empty-dir-archive-r1"}, 4: {REMAINING_RULES, OLD_REMAINING_RULES}}
     if version not in supported or plan.get("rules_version") not in supported[version]:
         raise PlanError(
             f"计划格式版本不兼容（计划 v{version}，当前需要 v{PLAN_SCHEMA_VERSION}）："

@@ -19,8 +19,9 @@ from .rules import (CATEGORIES, classify_entry, is_code_project_dir,
                     is_package_dir, is_sensitive_relative_path, is_temp_download)
 from .scanner import normalize_scope
 
-# Schema 4 keeps its original filename/basis contract; no finer destinations here.
-RULES_VERSION = 'milestone5-remaining-archive-r1'
+# Schema/layout/basis stay unchanged; r2 tightens only name admission.
+LEGACY_RULES_VERSION = 'milestone5-remaining-archive-r1'
+RULES_VERSION = 'milestone5-remaining-archive-r2'
 HASH_ALG = 'sha256/canonical-json-v3'
 LAYOUT_VERSION = 'remaining-slots-v1'
 
@@ -30,11 +31,11 @@ def refuse(message):
     raise PlanError(message)
 
 
-def relative(value, *, empty=False):
+def relative(value, *, empty=False, legacy=False):
     if (not isinstance(value, str) or (not value and not empty) or '\x00' in value
             or (value and any(p in ('', '.', '..') for p in value.split('/')))):
         refuse('剩余归档相对路径非法')
-    if is_sensitive_relative_path(value, legacy=True):
+    if is_sensitive_relative_path(value, legacy=legacy):
         refuse('剩余归档含受保护名称；请重新预览（不展示名称）')
     if value and any(p.startswith('.') or is_package_dir(p) or is_temp_download(p)
                      for p in value.split('/')):
@@ -94,7 +95,7 @@ def discover_remaining(settings, *, scope_dirs=None, recursive=False):
             result.scan_scope.append(nfc(rel))
         for name in sorted(names):
             child = rel + '/' + name if rel else name
-            if is_sensitive_relative_path(child, legacy=True):
+            if is_sensitive_relative_path(child):
                 exclude('疑似私人项目')
                 continue  # NEVER stat or persist sensitive names.
             if not rel and name == settings.target_parent_name:
@@ -240,9 +241,10 @@ def build_remaining_plan(settings, *, selection=None, scope_dirs=None, recursive
 def validate_structure(settings, plan):
     """Pure strings/types only: called BEFORE fingerprint or path metadata."""
     from .planner import normalized_dir_identity_map
-    if (plan.get('schema_version') != 4 or plan.get('rules_version') != RULES_VERSION
+    if (plan.get('schema_version') != 4 or plan.get('rules_version') not in {RULES_VERSION, LEGACY_RULES_VERSION}
             or plan.get('plan_hash_alg') != HASH_ALG or plan.get('plan_type') != 'remaining_archive'):
         refuse('剩余归档版本或语义不兼容')
+    legacy = plan['rules_version'] == LEGACY_RULES_VERSION
     if plan.get('downloads_dir') != settings.canonical_downloads_dir or plan.get('target_root') != settings.canonical_target_root:
         refuse('剩余归档根与可信配置不一致')
     batch = plan.get('plan_id')
@@ -257,7 +259,7 @@ def validate_structure(settings, plan):
     if not isinstance(scopes, list) or not isinstance(actual, list) or '' not in scopes or '' not in actual or type(plan.get('recursive')) is not bool:
         refuse('剩余归档范围非法')
     for s in scopes + actual:
-        if relative(s, empty=True) != s or (s and s.split('/')[0] == settings.target_parent_name):
+        if relative(s, empty=True, legacy=legacy) != s or (s and s.split('/')[0] == settings.target_parent_name):
             refuse('剩余归档范围含保护区域或非规范路径')
     if scopes != sorted(set(scopes)) or actual != sorted(set(actual)):
         refuse('归档范围重复')
@@ -276,7 +278,7 @@ def validate_structure(settings, plan):
     for c in candidates:
         if not isinstance(c, dict):
             refuse('候选非法')
-        rel = relative(c.get('rel_path')); kind = c.get('kind')
+        rel = relative(c.get('rel_path'), legacy=legacy); kind = c.get('kind')
         if rel != c['rel_path'] or rel in by_rel or kind not in {'file', 'empty_directory'}:
             refuse('候选重复、编码歧义或类型非法')
         if rel.split('/')[0] == settings.target_parent_name or not candidate_in_scope(rel, kind, scopes, plan['recursive']):
@@ -301,7 +303,7 @@ def validate_structure(settings, plan):
         if set(c) != expected_keys:
             refuse('候选字段与固定类型不符')
         by_rel[rel] = c
-    if selected != sorted({relative(s) for s in selected}) or any(s not in by_rel for s in selected):
+    if selected != sorted({relative(s, legacy=legacy) for s in selected}) or any(s not in by_rel for s in selected):
         refuse('勾选集合不是有效候选子集')
     ops = files + dirs
     if any(not isinstance(op, dict) for op in ops):
@@ -311,7 +313,7 @@ def validate_structure(settings, plan):
     expected_source, expected_dest, expected_dirs = {''}, set(), set()
     dir_pairs = set()
     for op in ops:
-        rel = relative(op.get('rel_path')); c = by_rel[rel]
+        rel = relative(op.get('rel_path'), legacy=legacy); c = by_rel[rel]
         if any(op.get(k) != v for k, v in c.items()):
             refuse('操作与候选身份／路径不一致')
         if op in files:

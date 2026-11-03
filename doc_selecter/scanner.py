@@ -385,7 +385,7 @@ def scan_scope(
                          basis="疑似临时/未完成项：不纳入分类")
                 continue
 
-            classification = classify_entry(name, st.st_mode)
+            classification = classify_entry(name, st.st_mode, top_level=not rel_dir)
             if classification.included:
                 result.included.append(
                     ScannedEntry(

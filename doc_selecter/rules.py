@@ -402,8 +402,8 @@ def file_subfolder(name: str, category: str) -> str | None:
     return None
 
 
-def classification_basis(name: str, category: str, ext: str) -> str:
-    sub = file_subfolder(name, category)
+def classification_basis(name: str, category: str, ext: str, *, top_level: bool = True) -> str:
+    sub = file_subfolder(name, category) if top_level else None
     if sub == "学校课程":
         term = next(t for t in COURSE_TERMS if t in os.path.splitext(name)[0] or t in os.path.splitext(decoded_filename(name))[0])
         return f"名字里有「{term}」→ 学校课程"
@@ -461,7 +461,7 @@ def is_unfinished(name: str) -> bool:
     return normalize_extension(name) in UNFINISHED_SUFFIXES
 
 
-def classify_entry(name: str, st_mode: int, *, excluded_names: frozenset[str] = frozenset(), legacy: bool = False) -> Classification:
+def classify_entry(name: str, st_mode: int, *, excluded_names: frozenset[str] = frozenset(), legacy: bool = False, top_level: bool = True) -> Classification:
     """按互斥优先级判定一个顶层条目。
 
     ``st_mode`` 来自 ``lstat``（不跟随符号链接）。
@@ -506,7 +506,7 @@ def classify_entry(name: str, st_mode: int, *, excluded_names: frozenset[str] = 
         )
     return Classification(
         name=name, status="included", category=category, extension=ext,
-        basis=(f"扩展名 {matched} 命中「{category}」规则" if legacy else classification_basis(name, category, matched)),
+        basis=(f"扩展名 {matched} 命中「{category}」规则" if legacy else classification_basis(name, category, matched, top_level=top_level)),
     )
 
 

@@ -162,7 +162,8 @@ def validate_structure(settings, plan):
     from .planner import normalized_dir_identity_map
     from .scanner import _classify_dir
     legacy = plan.get('rules_version') == 'milestone5-empty-dir-archive-r1'
-    if plan.get('schema_version') != 3 or plan.get('rules_version') not in {RULES_VERSION, 'milestone5-empty-dir-archive-r1'} or plan.get('plan_hash_alg') != V3_HASH_ALG:
+    finer_r1 = plan.get('rules_version') == 'milestone6-finer-subfolders-r1'
+    if plan.get('schema_version') != 3 or plan.get('rules_version') not in {RULES_VERSION, 'milestone6-finer-subfolders-r1', 'milestone5-empty-dir-archive-r1'} or plan.get('plan_hash_alg') != V3_HASH_ALG:
         _error('v3 规则／布局／哈希版本不兼容')
     if plan.get('downloads_dir') != settings.canonical_downloads_dir or plan.get('target_root') != settings.canonical_target_root:
         _error('计划根与可信配置不一致')
@@ -202,7 +203,8 @@ def validate_structure(settings, plan):
         rel = rel_ok(op.get('rel_path')); parent,_,name = rel.rpartition('/')
         if parent and not in_scope(parent): _error('文件不在明确扫描范围')
         category = op.get('category'); sub = op.get('document_subcategory' if legacy else 'subfolder')
-        classification=classify_entry(name,stat.S_IFREG,legacy=legacy)
+        # r1 persisted the top-level wording even for recursive files.
+        classification=classify_entry(name,stat.S_IFREG,legacy=legacy,top_level=finer_r1 or not parent)
         if classification.status != 'included' or classification.category != category or classification.basis != op.get('classification_basis'):
             _error('文件类别／筛查／依据与固定规则不一致')
         if category not in plan['category_selection']: _error('文件类别不在授权集合')

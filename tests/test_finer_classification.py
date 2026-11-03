@@ -301,7 +301,7 @@ class HistoricalClassificationTests(SandboxTestCase):
         def classifier(name, mode, **kwargs):return old['rules'].classify_entry(name,mode)
         with patch.object(remaining,'classify_entry',classifier):
             plan=remaining.build_remaining_plan(self.sandbox.settings,selection=['课程.pdf']).plan
-        self.assertEqual(plan['rules_version'],'milestone5-remaining-archive-r1')
+        self.assertEqual(plan['rules_version'],'milestone5-remaining-archive-r2')
         remaining.validate_structure(self.sandbox.settings,plan)
         self.assertNotIn('subfolder',plan['operations'][0])
         write_plan(self.sandbox.settings,plan)

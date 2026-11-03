@@ -708,7 +708,7 @@ class Controller:
                     hints.append({'kind': 'duplicate', 'text': f'可能和「{decoded_filename(original)}」是同一个文件（大小一样）'})
             mtime = op.get('identity', {}).get('mtime_ns')
             if op.get('category') == '安装包' and preview_time is not None and type(mtime) is int:
-                days = (int(preview_time) * 1_000_000_000 - mtime) // 86_400_000_000_000
+                days = (int(preview_time) - mtime // 1_000_000_000) // 86_400
                 if days >= 30:
                     hints.append({'kind': 'old_installer', 'text': f'放了 {days} 天，可能已经装过'})
             if display_name != name:
