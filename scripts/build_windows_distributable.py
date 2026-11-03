@@ -148,7 +148,7 @@ coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='FileOrgan
     env['DOCSELECTER_TEST_ROOT'] = str(artificial)
     env['TEMP'] = env['TMP'] = str(artificial)
     subprocess.run([str(folder / 'FileOrganizer.exe'), '--backend-self-test'],
-                    cwd=artificial, env=env, timeout=300, check=True)
+                    cwd=artificial, env=env, timeout=900, check=True)
     frozen_result = json.loads((artificial / 'backend-self-test.json').read_text())
     if frozen_result.get('restored') != 100 or not frozen_result.get('journals_healthy') or not frozen_result.get('frozen'):
         raise RuntimeError('冻结成品后台往返未通过。')

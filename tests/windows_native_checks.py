@@ -86,7 +86,7 @@ class WindowsNativeChecks(unittest.TestCase):
 
     def test_100_file_preview_move_undo(self):
         from doc_selecter.windows.smoke import run
-        result = run()
+        result = run(report=lambda phase: print('Synthetic 100-file check: ' + phase, flush=True))
         self.assertEqual(result['moved'], 100)
         self.assertEqual(result['restored'], 100)
         self.assertTrue(result['journals_healthy'])
@@ -136,13 +136,20 @@ class WindowsNativeChecks(unittest.TestCase):
         self.assertFalse(Path(plan['operations'][0]['dest']).exists())
 
     def test_open_file_is_skipped_without_closing_the_owner(self):
-        from doc_selecter.windows.native import api, close, READ_ATTR
+        from doc_selecter.windows.native import api, close, READ_ATTR, DELETE, nt_open, open_directory
         (self.source / 'sample.pdf').write_bytes(b'SOURCE')
         plan = self.plan()
         k, _ = api()
-        handle = k.CreateFileW(str(self.source / 'sample.pdf'), READ_ATTR, 1, None, 3, 0, None)
+        # Attribute-only handles do not establish a data-access sharing lock.
+        # Open the fake file for reading, without DELETE sharing; read no bytes.
+        handle = k.CreateFileW(str(self.source / 'sample.pdf'), 0x80000000, 1, None, 3, 0, None)
         self.assertNotEqual(handle, ctypes.c_void_p(-1).value)
         try:
+            with open_directory(str(self.source)) as directory:
+                with self.assertRaises(OSError) as blocked:
+                    attempt = nt_open(directory.handle, 'sample.pdf', access=READ_ATTR | DELETE, share=1)
+                    close(attempt)
+                self.assertEqual(blocked.exception.winerror, 32)
             result = self.execute(plan)
             self.assertEqual(result.moved, 0)
             self.assertEqual(result.skipped, 1)

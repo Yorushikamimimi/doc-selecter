@@ -6,7 +6,8 @@ import sys
 import tempfile
 
 
-def run():
+def run(report=None):
+    report = report or (lambda phase: None)
     raw = os.environ.get('DOCSELECTER_TEST_ROOT')
     if not raw:
         raise RuntimeError('后台自检必须明确注入人工沙盒。')
@@ -40,11 +41,13 @@ def run():
             raise AssertionError('只读预览改变了来源。')
     if Path(settings.target_root).exists():
         raise AssertionError('预览创建了目标目录。')
+    report('preview verified')
     write_plan(settings, plan)
     write_confirmation(settings, plan['plan_id'], plan['plan_hash'])
     moved = execute_plan(settings, plan['plan_id'], plan['plan_hash'])
     if moved.moved != 100 or moved.failed or moved.skipped:
         raise AssertionError('100 文件整理未全部完成。')
+    report('100 files moved')
     restored = undo_plan(settings, plan['plan_id'], confirm=True)
     if restored.restored != 100 or restored.undo_status != 'completed':
         raise AssertionError('100 文件撤销未全部完成。')
@@ -57,6 +60,7 @@ def run():
             raise AssertionError('撤销后目标仍存在。')
     if not all(item['state'].healthy for item in classify_journals(settings, plan['plan_id']).values()):
         raise AssertionError('日志不健康。')
+    report('100 files restored; identities, bytes and journals verified')
     frozen = bool(getattr(sys, 'frozen', False))
     if frozen:
         import _tkinter
