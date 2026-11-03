@@ -2,7 +2,7 @@
 
 更新日期：2026-10-31。
 
-## 当前状态：v0.1.0公开预览版已发布，Tian试用中（2026-10-30）
+## 当前状态：main 已含网页界面、长期操作记录、分类细化与三个提示（2026-10-31 已推送）；公开 Release 仍是 v0.1.0
 
 - **下载**：[v0.1.0 Release](https://github.com/Yorushikamimimi/doc-selecter/releases/tag/v0.1.0)，提供arm64 DMG、SHA256SUMS、构建清单与说明。App自带CPython3.12.15／Tcl与Tk9.0.4，不需另装Python。未替换原已安装App；新的分发成品尚待本人体验，不能写为Tian验收通过。
 - **版本**：实现提交 `472551b29690f4f3d9d93b89dad296e95f163845` 已推送main，注释tag v0.1.0精确指向该提交，GitHub标记prerelease、非draft。README下载入口和本条发布记录随文档另行提交；实际最新HEAD以Git为准。公开维护仅在doc-selecter，不同步扩展旧private项目。
@@ -18,9 +18,9 @@
 - **Tian走查（2026-10-31）**：主控用临时沙盒 /private/tmp/docsel-walk-kdT9uF（虚构文件，状态写在沙盒内）从源码启动网页版，Tian亲手走查后答复「都可以」，即路线B界面含①②与三个面板通过本人走查。
 - **提交（2026-10-31）**：经Tian授权，按Tk改版／网页界面与打包／文档三组提交（86fcbe1、b55157b、6508862），已推送 main。
 - **本地新包（2026-10-31）**：Tian发现已装App仍是v0.1.0旧界面（新界面只在源码）。主控用原隔离构建环境从 016ea85 构建到忽略目录 build/release.noindex/local-webui-20261031-016ea85（App＋DMG，版本号仍写0.1.0）。验证：codesign深度严格校验过、包内三个网页资源与源码逐字一致、含pywebview；未启动、未安装、未替换已装App。之后Tian自己双击打开并在真实Downloads实操整理88个文件，反馈没发现问题。
-- **长期操作记录（2026-10-31 主控实现，Tian装新包实看后验收通过）**：按已认可稿改 ui_controller.py（get_history 新增 past：读状态目录里已整理过的方案，按时间新到旧，只读、无撤销凭证；get_history(字符串ref) 看旧明细）、webui/app.js、app.css（「这次打开」＋「更早 · 只能查看」，按天分组、30天外按月、显示更早、这个文件夹／所有文件夹）。验证：新增2项测试，后台487过；临时沙盒造3次真实整理（含一次撤销），在 ego-browser 用真实数据看了列表、显示更早、切所有文件夹、深色明细。修了同一秒内两次整理排序不稳的问题。新本地包 build/release.noindex/local-history-20261031（签名校验过，包内资源与源码一致），Tian已拖进「应用程序」（核对代码与源码一致）。构建产物统一放 build/release.noindex（聚焦搜索不索引），以后本地打包用 --output-dir 指到这里。经Tian授权单独提交，未推送。
-- **分类细化＋三个提示（2026-10-31）**：效果稿 build/design/classify-draft-2026-10-31.html 获Tian认可，外派Codex实现（提示词 build/handoff/classify-executor-prompt.md；中途批准仅 plan_hash.project_operation 纳入可选 subfolder 字段）。新 RULES_VERSION milestone6-finer-subfolders-r1，字段 subfolder；旧 schema2／schema3 计划可撤销恢复、不能新移动；三个提示只在显示时算。主控验收（据Codex报告＋抽查）：6个安全底层与旧夹具未改；自跑后台505过；临时沙盒真实整理21个人工文件到全部新子文件夹并撤销全部回位；网页无innerHTML，看了执行者无头截图（浅色、类别说明、900宽）。Tian定放行微信时间戳：主控在 rules.py 只对「微信图片_20+12位」「mmexport1+12位」两个精确前缀免长数字检查（旧规则不变，其余敏感检查照旧），新增1项测试，后台506过。可以修（未修）：递归文件的灰字依据也写子文件夹名；旧安装包天数因秒截断可能少1天；归档剩余项目未对解码名做敏感筛查。新本地包 build/release.noindex/local-classify-20261031（签名过，包内源码与网页资源和工作区一致），Tian装上后答复验收通过；其截图实为上次88个文件按旧规则的整理结果（网页编码名提示在真实文件上生效），新子文件夹在真实Downloads的整理尚未实看，沙盒已验证。未提交。
-- **下一步**：发布需授权；发新版前按 public-release-readiness 检查新增暴露面。新旧App共用状态目录，勿同时打开。
+- **长期操作记录（2026-10-31 主控实现，Tian装新包实看后验收通过）**：按已认可稿改 ui_controller.py（get_history 新增 past：读状态目录里已整理过的方案，按时间新到旧，只读、无撤销凭证；get_history(字符串ref) 看旧明细）、webui/app.js、app.css（「这次打开」＋「更早 · 只能查看」，按天分组、30天外按月、显示更早、这个文件夹／所有文件夹）。验证：新增2项测试，后台487过；临时沙盒造3次真实整理（含一次撤销），在 ego-browser 用真实数据看了列表、显示更早、切所有文件夹、深色明细。修了同一秒内两次整理排序不稳的问题。新本地包 build/release.noindex/local-history-20261031（签名校验过，包内资源与源码一致），Tian已拖进「应用程序」（核对代码与源码一致）。构建产物统一放 build/release.noindex（聚焦搜索不索引），以后本地打包用 --output-dir 指到这里。经Tian授权单独提交 75b9e6f，已推送。
+- **分类细化＋三个提示（2026-10-31）**：效果稿 build/design/classify-draft-2026-10-31.html 获Tian认可，外派Codex实现（提示词 build/handoff/classify-executor-prompt.md；中途批准仅 plan_hash.project_operation 纳入可选 subfolder 字段）。新 RULES_VERSION milestone6-finer-subfolders-r1，字段 subfolder；旧 schema2／schema3 计划可撤销恢复、不能新移动；三个提示只在显示时算。主控验收（据Codex报告＋抽查）：6个安全底层与旧夹具未改；自跑后台505过；临时沙盒真实整理21个人工文件到全部新子文件夹并撤销全部回位；网页无innerHTML，看了执行者无头截图（浅色、类别说明、900宽）。Tian定放行微信时间戳：主控在 rules.py 只对「微信图片_20+12位」「mmexport1+12位」两个精确前缀免长数字检查（旧规则不变，其余敏感检查照旧），新增1项测试，后台506过。可以修（未修）：递归文件的灰字依据也写子文件夹名；旧安装包天数因秒截断可能少1天；归档剩余项目未对解码名做敏感筛查。新本地包 build/release.noindex/local-classify-20261031（签名过，包内源码与网页资源和工作区一致），Tian装上后答复验收通过；其截图实为上次88个文件按旧规则的整理结果（网页编码名提示在真实文件上生效），新子文件夹在真实Downloads的整理尚未实看，沙盒已验证。经授权提交 32404ce、2207928，连同 75b9e6f 已推送 main。
+- **下一步（2026-10-31 收口时）**：①入口清理已完成（2026-11-03，经Tian授权外派，主控复核）：桌面 v0.1.0 和旧存档 doc_selecter/build/macos 下3个早期构建已挪进废纸篓（可放回，清空由Tian自己做），聚焦搜索只剩 /Applications 那份，其修改时间未变；本项目构建产物在 build/release.noindex。②三个小毛病已修（2026-11-03，外派执行，主控验收；未提交）：递归文件依据只写到大类；安装包天数统一整秒计算；归档剩余项目对解码名做敏感筛查。规则升 milestone6-finer-subfolders-r2，剩余归档升 milestone5-remaining-archive-r2；对应 r1 旧计划可查看、撤销、恢复，不能新移动。新增 tests/test_small_fixes.py，主控自跑后台515过；临时沙盒真实整理并撤销通过，解码后为敏感名的文件被排除。未证明：未打包，界面未实看。③发新版 v0.2.0 需授权，发前按 public-release-readiness 检查新增暴露面。新旧App共用状态目录，勿同时打开。
 
 ### 主控发布保存记录（2026-10-15）
 
