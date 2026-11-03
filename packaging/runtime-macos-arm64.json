@@ -15,7 +15,7 @@
   "freezer": "PyInstaller",
   "freezer_version": "6.22.3",
   "hooks_version": "2026.8",
-  "release_version": "0.1.0",
+  "release_version": "0.2.0",
   "license_files": [
     "LICENSE.PyInstaller.txt",
     "LICENSE.bdb.txt",

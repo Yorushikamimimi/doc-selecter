@@ -8,7 +8,7 @@
   缺少配置即拒绝运行，绝不回退到真实 Downloads。
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 RULES_VERSION = "milestone6-finer-subfolders-r2"
 
 __all__ = ["__version__", "RULES_VERSION"]

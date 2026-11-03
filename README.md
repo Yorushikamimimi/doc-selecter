@@ -1,24 +1,26 @@
 # 文件整理助手（doc-selecter）
 
-macOS 本地文件分类工具。选择文件夹、预览整理结果、确认移动，必要时撤销。应用使用 Python 3 + Tkinter 标准库；自包含App自带运行时，源码开发与打包另需构建环境。
+macOS 本地文件分类工具。选择文件夹、预览整理结果、确认移动，必要时撤销。App 使用网页界面（pywebview），保留 Tkinter 备用界面；自包含App自带运行时，源码开发与打包另需构建环境。
 
 ## 功能
 
-- 按类型分为安装包、文档资料、图片截图、音视频、压缩包、代码与数据、待确认；顶层文档再按格式细分。
+- 按类型分为安装包、文档资料、图片截图、音视频、压缩包、代码与数据、待确认。
+- 顶层文件再按名字和格式细分子文件夹，例如手机照片、手机截屏、电脑截屏、微信图片、学校课程、Mac／Windows／手机安装包、ZIP；每个文件都显示分类依据。
+- 预览时提示可能重复的文件、放满30天、可能已装过的安装包，以及网页编码的文件名（显示成中文，不改名）。提示只供参考，不改变去向。
 - 选择来源和子目录范围，支持受控递归与子目录全选。
 - 提示新文件，不自动整理或扩大已确认范围。
 - 可选归档本批整理后变空的目录；另有独立的剩余项归档入口。
-- 当前会话内按逆序撤销多批操作。
+- 可撤销；操作记录长期保存，可按日期查看以前每次整理的明细（只读）。
 
 ## 下载 macOS App
 
-**[下载 v0.1.0 DMG（Apple Silicon／arm64）](https://github.com/Yorushikamimimi/doc-selecter/releases/download/v0.1.0/doc-selecter-0.1.0-macos-arm64.dmg)** · [Release说明](https://github.com/Yorushikamimimi/doc-selecter/releases/tag/v0.1.0) · [SHA256SUMS](https://github.com/Yorushikamimimi/doc-selecter/releases/download/v0.1.0/SHA256SUMS)
+**[下载 v0.2.0 DMG（Apple Silicon／arm64）](https://github.com/Yorushikamimimi/doc-selecter/releases/download/v0.2.0/doc-selecter-0.2.0-macos-arm64.dmg)** · [Release说明](https://github.com/Yorushikamimimi/doc-selecter/releases/tag/v0.2.0) · [SHA256SUMS](https://github.com/Yorushikamimimi/doc-selecter/releases/download/v0.2.0/SHA256SUMS)
 
-这是首个**公开预览版**，App自带Python3.12.15与Tcl／Tk，使用者无需另装Python。打开DMG后可手动复制应用；若已有同名应用，请先核对版本，不要直接替换。首次启动须选择来源，建议先用人工文件夹体验预览、确认整理和撤销。
+这是**公开预览版 v0.2.0**，App自带Python3.12.15、网页界面运行库与Tcl／Tk备用界面，使用者无需另装Python。打开DMG后可手动复制应用；若已有同名应用，请先核对版本，不要直接替换。首次启动须选择来源，建议先用人工文件夹体验预览、确认整理和撤销。旧版本留下的整理记录仍可查看和撤销。
 
 仅提供Apple Silicon／arm64；最低系统构建声明macOS11.0，实际只在macOS27.0（26A428）验证，其他系统及另一台干净Mac未验证，不是universal。只有ad-hoc签名，无Developer ID／公证；网络下载后的Gatekeeper体验尚未验证，系统可能拦截。不要关闭全局保护或自动移除隔离属性。
 
-发布前主控独立后台449项通过，总642 ID、193项GUI未运行；另核对正式App搬迁启动、DMG复制启动及隐藏验证副本的人工文件整理／撤销。程序化证据不等于本人原生体验，新分发成品仍等待Tian验收。
+发布前后台测试515项通过，200项GUI测试未运行；网页界面与操作记录已在本机原生窗口实际使用。子文件夹细分和三类提示经临时沙盒整理／撤销验证，真实下载目录上的原生整理尚未实看；剩余项归档专项人工验收尚未完成。
 
 ## 从源码运行
 
@@ -36,7 +38,7 @@ cp config.json.example config.json
 python3 -m doc_selecter.gui
 ```
 
-界面操作：选择来源 → 生成预览 → 勾选范围 → 确认整理。请先用人工文件夹试用，再处理自己的文件。
+该入口打开 Tkinter 备用界面；网页界面通过 App 使用。界面操作：选择来源 → 生成预览 → 勾选范围 → 确认整理。请先用人工文件夹试用，再处理自己的文件。
 
 命令行提供 `plan`、`confirm`、`execute`、`undo`、`recover`、`status`、`remaining-plan`：
 
@@ -51,19 +53,19 @@ python3 -m doc_selecter --help
 开发者需已有Python3.12及macOS的sips、iconutil、hdiutil、codesign。以下示例输出目录必须尚不存在；再次构建请选择新目录，失败材料不会覆盖或删除：
 
 ```bash
-python3 -B scripts/prepare_macos_build.py --output-dir build/runtime-0.1.0
-build/runtime-0.1.0/venv/bin/python3 -B scripts/build_distributable.py \
-  --output-dir build/release/candidate-0.1.0
+python3 -B scripts/prepare_macos_build.py --output-dir build/runtime-0.2.0
+build/runtime-0.2.0/venv/bin/python3 -B scripts/build_distributable.py \
+  --output-dir build/release/candidate-0.2.0
 ```
 
-准备入口只在指定新目录下载／校验固定运行时，创建隔离venv并安装哈希锁定wheel，不修改全局Python。可通过`--archive`复用已下载的运行时，但仍核对SHA256。构建入口仅接受固定Python／构建依赖及arm64环境，显式复制22个当前模块和正式图标／许可资源进行冻结，不复制整个venv、项目树或home；旧测试、兼容夹具、config、凭证、状态和用户材料均不打包。PyInstaller收集必要标准库、扩展、Tcl/Tk脚本数据及动态库，不盲目剥除运行组件。
+准备入口只在指定新目录下载／校验固定运行时，创建隔离venv并安装哈希锁定wheel，不修改全局Python。可通过`--archive`复用已下载的运行时，但仍核对SHA256。构建入口仅接受固定Python／构建依赖及arm64环境，显式复制24个当前模块和正式图标／许可资源进行冻结，不复制整个venv、项目树或home；旧测试、兼容夹具、config、凭证、状态和用户材料均不打包。PyInstaller收集必要标准库、扩展、Tcl/Tk脚本数据及动态库，不盲目剥除运行组件。
 
-输出包含`dist/文件整理助手.app`、`doc-selecter-0.1.0-macos-arm64.dmg`、`SHA256SUMS`、逐文件构建清单和Release说明；所有产物在Git忽略的build中。DMG只提供应用、Applications拖放入口及说明，不运行安装器或自动替换旧App。App从自身包定位运行时，不依赖源码目录、cwd、PATH或用户site；首次来源未选，正式状态仍在既有应用支持位置，验证时DOCSELECTER_TEST_ROOT优先。
+输出包含`dist/文件整理助手.app`、`doc-selecter-0.2.0-macos-arm64.dmg`、`SHA256SUMS`、逐文件构建清单和Release说明；所有产物在Git忽略的build中。DMG只提供应用、Applications拖放入口及说明，不运行安装器或自动替换旧App。App从自身包定位运行时，不依赖源码目录、cwd、PATH或用户site；首次来源未选，正式状态仍在既有应用支持位置，验证时DOCSELECTER_TEST_ROOT优先。
 
 可复核产物的架构、动态依赖、内部链接、资源权限及最低系统声明：
 
 ```bash
-python3 -B scripts/audit_macos_bundle.py "build/release/candidate-0.1.0/dist/文件整理助手.app"
+python3 -B scripts/audit_macos_bundle.py "build/release/candidate-0.2.0/dist/文件整理助手.app"
 ```
 
 该审查只读App包，接受已核对的包内链接和系统库，不把构建声明当成旧系统实测。App为PyInstaller本地ad-hoc签名且资源封印通过校验；没有Apple分发身份或公证。固定依赖／来源可追溯，但不同构建的压缩归档和签名可能不同，不承诺逐字节确定性；以每份产物的校验和为准。

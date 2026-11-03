@@ -44,13 +44,14 @@ def validate_environment(lock):
 def release_notes(lock):
     return f'''# 文件整理助手 v{lock['release_version']}公开预览版
 
-- macOS Apple Silicon / arm64，自带Python {lock['python_version']}、Tcl/Tk，无需另装Python。
-- 功能沿用公开源码基线：先选来源、预览并确认整理，按既有身份和日志契约撤销。
+- macOS Apple Silicon / arm64，自带Python {lock['python_version']}、网页界面运行库及Tcl/Tk备用界面，无需另装Python。
+- 新增：网页界面；操作记录可查看以前的整理（只读）；顶层文件按名字细分到子文件夹（手机照片、电脑截屏、学校课程、各平台安装包等）；预览中提示可能重复、可能已装过的安装包和网页编码文件名。
+- 安全契约不变：先选来源、预览并确认整理，按既有身份和日志契约撤销；旧版本留下的计划仍可查看、撤销，不能用新规则直接执行。
 - 构建最低系统声明macOS {lock['deployment_target']}；实际仅在macOS 27.0（26A428）arm64测试，其他系统及另一台干净Mac未验证。
 - 本地ad-hoc签名，无Developer ID或公证。网络下载后Gatekeeper可能拦截，未验证下载隔离体验；不要关闭全局安全保护或自动移除隔离属性。
 - 不自动安装、替换已有应用或读取用户下载目录。启动后来源未选，用户须主动选择。
 - 计划、确认和日志保留在原应用支持位置，不能当缓存删除。外部变动可能阻止完整撤销。
-- 用户原生交互及剩余项归档专项原生人工验收尚未完成，程序化验证不等于人工验收。
+- 网页界面与操作记录已在本机原生窗口实际使用；子文件夹细分与三类提示经临时沙盒验证，真实下载目录上的原生整理和剩余项归档专项人工验收尚未完成，程序化验证不等于人工验收。
 - 请从官方公开仓库Release核对版本与SHA256SUMS：https://github.com/Yorushikamimimi/doc-selecter/releases
 '''
 
@@ -59,10 +60,10 @@ def installation_guide(lock):
     return (
         f'文件整理助手 {lock["release_version"]} 公开预览版 · Apple Silicon arm64\n\n'
         '拖入Applications是手动安装；若已有同名应用，请先核对版本，不要未经确认替换。\n'
-        '自带Python／Tcl／Tk，首次启动须选择来源，不自动扫描。\n'
+        '自带Python、网页界面运行库及Tcl／Tk备用界面，首次启动须选择来源，不自动扫描。\n'
         f'构建最低系统声明macOS {lock["deployment_target"]}；实际仅测试macOS 27.0（26A428）arm64；其他系统及另一台干净Mac未验证。\n'
         '本地ad-hoc签名，无Developer ID、未公证；网络下载后的Gatekeeper体验未验证，macOS可能拦截，勿关闭全局保护或自动移除隔离属性。\n'
-        '用户原生交互及剩余项归档专项原生人工验收尚未完成。\n'
+        '子文件夹细分在真实下载目录上的原生整理及剩余项归档专项人工验收尚未完成。\n'
         '请核对官方Release、版本与SHA256SUMS：https://github.com/Yorushikamimimi/doc-selecter/releases\n')
 
 

@@ -101,7 +101,7 @@ class DistributableTests(SandboxTestCase):
 
     def test_release_notes_remain_accurate_before_and_after_publication(self):
         text=builder.release_notes(json.loads(builder.LOCK_FILE.read_text()))
-        self.assertIn('0.1.0',text);self.assertIn('公开预览版',text)
+        self.assertIn('0.2.0',text);self.assertIn('公开预览版',text)
         for temporary in ('候选','尚未发布','尚未正式发布','待主控','待独立核验'):
             self.assertNotIn(temporary,text)
         for boundary in ('arm64','11.0','27.0','Developer ID','公证','Gatekeeper','干净Mac','原生','SHA256SUMS'):
@@ -110,7 +110,7 @@ class DistributableTests(SandboxTestCase):
 
     def test_installation_guide_has_durable_status_and_safety_boundaries(self):
         text=builder.installation_guide(json.loads(builder.LOCK_FILE.read_text()))
-        self.assertIn('0.1.0 公开预览版',text)
+        self.assertIn('0.2.0 公开预览版',text)
         for temporary in ('候选','尚未发布','尚未正式发布','待主控','待独立核验'):
             self.assertNotIn(temporary,text)
         for boundary in ('arm64','11.0','27.0','Developer ID','未公证','Gatekeeper','干净Mac','原生','SHA256SUMS','不要未经确认替换'):
