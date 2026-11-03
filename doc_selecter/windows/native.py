@@ -283,6 +283,11 @@ def lock(handle, *, unlock=False):
         raise error(code)
 
 
+def _allowed_writer(sid, owner, allowed):
+    # OWNER RIGHTS (S-1-3-4) means the object's actual owner, not everyone.
+    return sid in allowed or (sid == 'S-1-3-4' and owner in allowed)
+
+
 def require_private_directory(directory):
     """Reject state roots writable by principals other than user/admin/SYSTEM.
 
@@ -292,7 +297,7 @@ def require_private_directory(directory):
     adv = C.WinDLL('advapi32', use_last_error=True)
     k = api()[0]
     get = adv.GetSecurityInfo
-    get.argtypes = [HANDLE, U32, U32, HANDLE, HANDLE, C.POINTER(HANDLE), HANDLE, C.POINTER(HANDLE)]
+    get.argtypes = [HANDLE, U32, U32, C.POINTER(HANDLE), HANDLE, C.POINTER(HANDLE), HANDLE, C.POINTER(HANDLE)]
     get.restype = U32
     sid_string = adv.ConvertSidToStringSidW
     sid_string.argtypes = [HANDLE, C.POINTER(HANDLE)]; sid_string.restype = C.c_int
@@ -322,11 +327,14 @@ def require_private_directory(directory):
         allowed = {sid_text(HANDLE.from_buffer(buf)), 'S-1-5-18', 'S-1-5-32-544'}
     finally:
         close(token.value)
-    dacl, descriptor = HANDLE(), HANDLE()
-    code = get(directory.handle, 1, 4, None, None, C.byref(dacl), None, C.byref(descriptor))
+    owner, dacl, descriptor = HANDLE(), HANDLE(), HANDLE()
+    code = get(directory.handle, 1, 1 | 4, C.byref(owner), None, C.byref(dacl), None, C.byref(descriptor))
     if code:
         raise error(code)
     try:
+        owner_text = sid_text(owner) if owner.value else None
+        if owner_text not in allowed:
+            raise PermissionError('状态目录所有者不可信，拒绝写入。')
         if not dacl.value:
             raise PermissionError('状态目录没有有效访问控制，拒绝写入。')
         count = U16.from_address(dacl.value + 4).value
@@ -341,7 +349,7 @@ def require_private_directory(directory):
                 raise PermissionError('状态目录访问控制类型未验证，拒绝写入。')
             if kind == 0 and size >= 12:
                 mask = U32.from_address(ace.value + 4).value
-                if mask & (0x40000000 | 0x10000000 | 0xD0156) and sid_text(ace.value + 8) not in allowed:
+                if mask & (0x40000000 | 0x10000000 | 0xD0156) and not _allowed_writer(sid_text(ace.value + 8), owner_text, allowed):
                     raise PermissionError('状态目录可被其他用户写入，请选择个人本地目录。')
     finally:
         free(descriptor)

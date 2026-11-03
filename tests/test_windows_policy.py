@@ -146,6 +146,17 @@ class WindowsMoveBoundaryTests(unittest.TestCase):
             release.assert_called_once_with(91)
         stream.close.assert_called_once_with()
 
+    def test_owner_rights_requires_a_trusted_actual_owner(self):
+        allowed = {'CURRENT_USER', 'S-1-5-18', 'S-1-5-32-544'}
+        self.assertTrue(native._allowed_writer('S-1-3-4', 'CURRENT_USER', allowed))
+        self.assertFalse(native._allowed_writer('S-1-3-4', 'OTHER_USER', allowed))
+        self.assertFalse(native._allowed_writer('S-1-3-4', None, allowed))
+
+    def test_broad_writers_are_not_granted_by_trusted_ownership(self):
+        allowed = {'CURRENT_USER', 'S-1-5-18', 'S-1-5-32-544'}
+        for sid in ('S-1-1-0', 'S-1-5-11', 'S-1-5-32-545', 'OTHER_USER'):
+            self.assertFalse(native._allowed_writer(sid, 'CURRENT_USER', allowed))
+
 
 class WindowsFallbackTests(unittest.TestCase):
     def test_missing_runtime_can_choose_tk_without_installing(self):

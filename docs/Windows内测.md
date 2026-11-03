@@ -26,7 +26,7 @@
 - `windows.io` 仅适配现有引擎使用的文件系统操作。目录对象不是 CRT 文件描述符；文件描述符仍是真实 CRT fd，并持有父链。
 - 不读取用户文件正文获得身份。128 位 File ID 保留为 Python 整数；JS 不负责计算身份或计划哈希。
 - Windows 计划的 `platform=windows-ntfs-v1` 参与哈希；原 macOS 计划投影不变。计划、确认、intent/result、撤销和恢复沿用现有引擎。
-- `LockFileEx` 提供独占非阻塞锁，应用锁和操作锁分开。状态目录拒绝对其他普通用户开放写入的 ACL；不提升权限或修改系统 ACL。
+- `LockFileEx` 提供独占非阻塞锁，应用锁和操作锁分开。状态目录先核验实际所有者；OWNER RIGHTS 仅按已核验所有者解释，拒绝对其他普通用户开放写入的 ACL；不提升权限或修改系统 ACL。
 - 新目标目录仍记录创建 intent、身份和 result；Windows 不执行未证明的目录刷盘。目录归档功能因此不启用。
 
 ## 界面与分发
