@@ -1,0 +1,51 @@
+{
+  "python_version": "3.12.15",
+  "pbs_release": "20261013",
+  "target": "x86_64-apple-darwin",
+  "architecture": "x86_64",
+  "deployment_target": "10.15",
+  "runtime": {
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261013/cpython-3.12.15%2B20261013-x86_64-apple-darwin-install_only_stripped.tar.gz",
+    "sha256": "d09998f85752b646873a8a6bc7eea442a0d251b1c8d2413aa8ea06ef131c3335"
+  },
+  "license_archive": {
+    "url": "https://github.com/astral-sh/python-build-standalone/releases/download/20261013/cpython-3.12.15%2B20261013-x86_64-apple-darwin-pgo%2Blto-full.tar.zst",
+    "sha256": "7b24fd8362742c471989a4491770beb377f0127c8671778a223d6c6b6c10a578"
+  },
+  "freezer": "PyInstaller",
+  "freezer_version": "6.22.3",
+  "hooks_version": "2026.8",
+  "release_version": "0.2.0",
+  "license_files": [
+    "LICENSE.PyInstaller.txt",
+    "LICENSE.bdb.txt",
+    "LICENSE.bzip2.txt",
+    "LICENSE.cpython.txt",
+    "LICENSE.expat.txt",
+    "LICENSE.libX11.txt",
+    "LICENSE.libXau.txt",
+    "LICENSE.libedit.txt",
+    "LICENSE.libffi.txt",
+    "LICENSE.liblzma.txt",
+    "LICENSE.libuuid.txt",
+    "LICENSE.libxcb.txt",
+    "LICENSE.mpdecimal.txt",
+    "LICENSE.ncurses.txt",
+    "LICENSE.openssl-1.1.txt",
+    "LICENSE.openssl-3.txt",
+    "LICENSE.sqlite.txt",
+    "LICENSE.tcl.txt",
+    "LICENSE.tix.txt",
+    "LICENSE.zlib.txt",
+    "LICENSE.pywebview.txt",
+    "LICENSE.pyobjc-core.txt",
+    "LICENSE.pyobjc-framework-Cocoa.txt",
+    "LICENSE.pyobjc-framework-Quartz.txt",
+    "LICENSE.pyobjc-framework-Security.txt",
+    "LICENSE.pyobjc-framework-UniformTypeIdentifiers.txt",
+    "LICENSE.pyobjc-framework-WebKit.txt",
+    "LICENSE.bottle.txt",
+    "LICENSE.proxy_tools.txt",
+    "LICENSE.typing_extensions.txt"
+  ]
+}

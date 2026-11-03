@@ -17,8 +17,10 @@ def verify_archive(path, expected):
         raise ValueError('运行时SHA256不符，拒绝解包或执行。')
 
 
-def prepare(output, archive=None):
-    lock = json.loads((REPO/'packaging/runtime-macos-arm64.json').read_text())
+def prepare(output, archive=None, arch='arm64'):
+    if arch not in ('arm64', 'x86_64'):
+        raise ValueError('只支持arm64或x86_64。')
+    lock = json.loads((REPO/f'packaging/runtime-macos-{arch}.json').read_text())
     output = Path(output).absolute()
     output.mkdir(parents=True, exist_ok=False)
     (output/'tmp').mkdir()
@@ -55,4 +57,5 @@ if __name__ == '__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir',type=Path,required=True)
     parser.add_argument('--archive',type=Path,help='Optional previously downloaded archive; SHA256 still required')
-    args=parser.parse_args();print(prepare(args.output_dir,args.archive))
+    parser.add_argument('--arch',choices=('arm64','x86_64'),default='arm64')
+    args=parser.parse_args();print(prepare(args.output_dir,args.archive,args.arch))

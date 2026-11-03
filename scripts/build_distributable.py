@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build an arm64 self-contained App/DMG with the pinned, isolated PyInstaller env."""
+"""Build an arm64 or x86_64 self-contained App/DMG with the pinned, isolated PyInstaller env."""
 from __future__ import annotations
 import datetime
 import hashlib
@@ -21,7 +21,12 @@ _local = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_local)
 MODULES = _local.MODULES
 NAME = _local.NAME
-LOCK_FILE = REPO/'packaging/runtime-macos-arm64.json'
+LOCK_FILES = {arch: REPO/f'packaging/runtime-macos-{arch}.json' for arch in ('arm64', 'x86_64')}
+LOCK_FILE = LOCK_FILES['arm64']
+PLATFORM_LABELS = {'arm64': 'Apple Silicon / arm64', 'x86_64': 'Intel / x86_64'}
+# Only the arm64 Mac is available locally; x86_64 runs there under Rosetta.
+TESTED_ON = {'arm64': '实际仅在macOS 27.0（26A428）arm64测试',
+             'x86_64': '实际仅在macOS 27.0（26A428）arm64的Rosetta转译下测试，未在真实Intel Mac测试'}
 
 
 def digest(path):
@@ -29,8 +34,8 @@ def digest(path):
 
 
 def validate_environment(lock):
-    if sys.platform != 'darwin' or platform.machine() != 'arm64':
-        raise RuntimeError('本构建入口只交付已选择的macOS arm64产物。')
+    if sys.platform != 'darwin' or platform.machine() != lock['architecture']:
+        raise RuntimeError(f"本构建入口只交付已选择的macOS {lock['architecture']}产物，须在同架构解释器运行。")
     if sys.prefix == sys.base_prefix:
         raise RuntimeError('请在隔离构建虚拟环境运行，不修改全局Python。')
     if platform.python_version() != lock['python_version']:
@@ -41,13 +46,30 @@ def validate_environment(lock):
             raise RuntimeError('构建依赖版本不符：' + name)
 
 
+def rosetta_translated():
+    r = subprocess.run(['/usr/sbin/sysctl', '-n', 'sysctl.proc_translated'], capture_output=True, text=True)
+    return r.returncode == 0 and r.stdout.strip() == '1'
+
+
+def native_tool_path(output, env):
+    """Xcode command-line shims are arm64-only; run them natively when PyInstaller is translated."""
+    if platform.machine() != 'x86_64' or not rosetta_translated():
+        return env
+    shims = output/'host-tools'; shims.mkdir()
+    for tool in ('lipo', 'install_name_tool', 'otool', 'strip'):
+        (shims/tool).write_text(f'#!/bin/sh\nexec /usr/bin/arch -arm64 /usr/bin/{tool} "$@"\n')
+        (shims/tool).chmod(0o755)
+    env = dict(env); env['PATH'] = str(shims) + os.pathsep + env.get('PATH', '')
+    return env
+
+
 def release_notes(lock):
     return f'''# 文件整理助手 v{lock['release_version']}公开预览版
 
-- macOS Apple Silicon / arm64，自带Python {lock['python_version']}、网页界面运行库及Tcl/Tk备用界面，无需另装Python。
+- macOS {PLATFORM_LABELS[lock['architecture']]}，自带Python {lock['python_version']}、网页界面运行库及Tcl/Tk备用界面，无需另装Python。
 - 新增：网页界面；操作记录可查看以前的整理（只读）；顶层文件按名字细分到子文件夹（手机照片、电脑截屏、学校课程、各平台安装包等）；预览中提示可能重复、可能已装过的安装包和网页编码文件名。
 - 安全契约不变：先选来源、预览并确认整理，按既有身份和日志契约撤销；旧版本留下的计划仍可查看、撤销，不能用新规则直接执行。
-- 构建最低系统声明macOS {lock['deployment_target']}；实际仅在macOS 27.0（26A428）arm64测试，其他系统及另一台干净Mac未验证。
+- 构建最低系统声明macOS {lock['deployment_target']}；{TESTED_ON[lock['architecture']]}，其他系统及另一台干净Mac未验证。
 - 本地ad-hoc签名，无Developer ID或公证。网络下载后Gatekeeper可能拦截，未验证下载隔离体验；不要关闭全局安全保护或自动移除隔离属性。
 - 不自动安装、替换已有应用或读取用户下载目录。启动后来源未选，用户须主动选择。
 - 计划、确认和日志保留在原应用支持位置，不能当缓存删除。外部变动可能阻止完整撤销。
@@ -58,17 +80,17 @@ def release_notes(lock):
 
 def installation_guide(lock):
     return (
-        f'文件整理助手 {lock["release_version"]} 公开预览版 · Apple Silicon arm64\n\n'
+        f'文件整理助手 {lock["release_version"]} 公开预览版 · {PLATFORM_LABELS[lock["architecture"]]}\n\n'
         '拖入Applications是手动安装；若已有同名应用，请先核对版本，不要未经确认替换。\n'
         '自带Python、网页界面运行库及Tcl／Tk备用界面，首次启动须选择来源，不自动扫描。\n'
-        f'构建最低系统声明macOS {lock["deployment_target"]}；实际仅测试macOS 27.0（26A428）arm64；其他系统及另一台干净Mac未验证。\n'
+        f'构建最低系统声明macOS {lock["deployment_target"]}；{TESTED_ON[lock["architecture"]]}；其他系统及另一台干净Mac未验证。\n'
         '本地ad-hoc签名，无Developer ID、未公证；网络下载后的Gatekeeper体验未验证，macOS可能拦截，勿关闭全局保护或自动移除隔离属性。\n'
         '子文件夹细分在真实下载目录上的原生整理及剩余项归档专项人工验收尚未完成。\n'
         '请核对官方Release、版本与SHA256SUMS：https://github.com/Yorushikamimimi/doc-selecter/releases\n')
 
 
-def build(output: Path, *, make_dmg=True) -> Path:
-    lock = json.loads(LOCK_FILE.read_text())
+def build(output: Path, *, make_dmg=True, arch='arm64') -> Path:
+    lock = json.loads(LOCK_FILES[arch].read_text())
     validate_environment(lock)
     sources = [REPO/'doc_selecter'/m for m in MODULES]
     sources += [REPO/'doc_selecter/webui'/n for n in _local.WEB_RESOURCES]
@@ -131,7 +153,7 @@ def build(output: Path, *, make_dmg=True) -> Path:
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='FileOrganizer',
     debug=False, bootloader_ignore_signals=False, strip=False, upx=False,
-    console=False, argv_emulation=False, target_arch='arm64', codesign_identity=None, entitlements_file=None)
+    console=False, argv_emulation=False, target_arch={lock['architecture']!r}, codesign_identity=None, entitlements_file=None)
 coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='FileOrganizer')
 app = BUNDLE(coll, name={NAME+'.app'!r}, icon={str(icon)!r},
     bundle_identifier='com.yorushikamimimi.docselecter', info_plist={info!r})
@@ -139,6 +161,7 @@ app = BUNDLE(coll, name={NAME+'.app'!r}, icon={str(icon)!r},
     env = os.environ.copy()
     env['PYINSTALLER_CONFIG_DIR'] = str(output/'pyinstaller-cache')
     env['MACOSX_DEPLOYMENT_TARGET'] = lock['deployment_target']
+    env = native_tool_path(output, env)
     # No user site or cwd imports; analysis only sees the explicit staged package.
     args = [sys.executable, '-I', '-B', '-m', 'PyInstaller', '--distpath', str(output/'dist'),
             '--workpath', str(output/'work'), str(spec)]
@@ -168,7 +191,7 @@ app = BUNDLE(coll, name={NAME+'.app'!r}, icon={str(icon)!r},
         shutil.copytree(app, image_stage/app.name, symlinks=True)
         (image_stage/'Applications').symlink_to('/Applications', target_is_directory=True)
         (image_stage/'使用说明.txt').write_text(installation_guide(lock))
-        dmg = output/f'doc-selecter-{lock["release_version"]}-macos-arm64.dmg'
+        dmg = output/f'doc-selecter-{lock["release_version"]}-macos-{lock["architecture"]}.dmg'
         run(['/usr/bin/hdiutil', 'create', '-srcfolder', str(image_stage), '-volname', NAME,
              '-format', 'UDZO', '-imagekey', 'zlib-level=9', str(dmg)], timeout=300)
         run(['/usr/bin/hdiutil', 'verify', str(dmg)], timeout=120)
@@ -182,9 +205,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', type=Path)
     parser.add_argument('--app-only', action='store_true')
+    parser.add_argument('--arch', choices=tuple(LOCK_FILES), default='arm64')
     args = parser.parse_args()
     output = args.output_dir or REPO/'build'/'release'/(datetime.datetime.now().strftime('%Y%m%d-%H%M%S')+'-'+uuid.uuid4().hex[:4])
-    print(build(output, make_dmg=not args.app_only))
+    print(build(output, make_dmg=not args.app_only, arch=args.arch))
 
 if __name__ == '__main__':
     main()

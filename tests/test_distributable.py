@@ -116,3 +116,39 @@ class DistributableTests(SandboxTestCase):
         for boundary in ('arm64','11.0','27.0','Developer ID','未公证','Gatekeeper','干净Mac','原生','SHA256SUMS','不要未经确认替换'):
             self.assertIn(boundary,text)
         self.assertNotIn('/releases/download/',text)
+
+    def test_intel_lock_matches_arm64_except_architecture_and_runtime(self):
+        arm=json.loads(builder.LOCK_FILES['arm64'].read_text());intel=json.loads(builder.LOCK_FILES['x86_64'].read_text())
+        self.assertEqual(intel['architecture'],'x86_64');self.assertEqual(intel['target'],'x86_64-apple-darwin')
+        for key in ('runtime','license_archive'):
+            self.assertIn('x86_64-apple-darwin',intel[key]['url']);self.assertRegex(intel[key]['sha256'],r'^[a-f0-9]{64}$')
+            self.assertNotEqual(intel[key]['sha256'],arm[key]['sha256'])
+        for key in ('python_version','pbs_release','freezer_version','hooks_version','release_version','license_files'):
+            self.assertEqual(intel[key],arm[key])
+
+    def test_environment_must_match_selected_architecture(self):
+        lock=json.loads(builder.LOCK_FILES['x86_64'].read_text())
+        with patch.object(builder.platform,'machine',return_value='arm64'),patch.object(builder.sys,'platform','darwin'):
+            with self.assertRaisesRegex(RuntimeError,'x86_64'):builder.validate_environment(lock)
+
+    def test_intel_notes_state_rosetta_only_boundary(self):
+        lock=json.loads(builder.LOCK_FILES['x86_64'].read_text())
+        for text in (builder.release_notes(lock),builder.installation_guide(lock)):
+            for boundary in ('Intel / x86_64','10.15','Rosetta','未在真实Intel Mac测试','Developer ID','Gatekeeper','SHA256SUMS'):
+                self.assertIn(boundary,text)
+            self.assertNotIn('Apple Silicon',text)
+
+    def test_preparation_rejects_unknown_architecture_before_writing(self):
+        prep=module('prepare_macos_build');target=self.sandbox.root/'environment'
+        with self.assertRaises(ValueError):prep.prepare(target,arch='universal2')
+        self.assertFalse(target.exists())
+
+    def test_native_tool_shims_only_when_translated(self):
+        out=self.sandbox.root/'out';out.mkdir();env={'PATH':'/usr/bin'}
+        with patch.object(builder.platform,'machine',return_value='arm64'):
+            self.assertIs(builder.native_tool_path(out,env),env)
+        with patch.object(builder.platform,'machine',return_value='x86_64'),patch.object(builder,'rosetta_translated',return_value=True):
+            shimmed=builder.native_tool_path(out,env)
+        self.assertEqual(env,{'PATH':'/usr/bin'})
+        self.assertTrue(shimmed['PATH'].startswith(str(out/'host-tools')))
+        self.assertIn('/usr/bin/arch -arm64 /usr/bin/lipo',(out/'host-tools/lipo').read_text())

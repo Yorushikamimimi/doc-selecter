@@ -34,7 +34,8 @@ def resolve_dependency(name, binary, app, rpaths):
     raise ValueError('越界或未解析的运行依赖：' + name)
 
 
-def audit(app: Path):
+def audit(app: Path, arch='arm64'):
+    other = {'arm64': 'x86_64', 'x86_64': 'arm64'}[arch]
     app = app.absolute()
     info = plistlib.loads((app/'Contents/Info.plist').read_bytes())
     if info.get('DocSelecterPython'):
@@ -58,7 +59,7 @@ def audit(app: Path):
         if hits: paths.append({'file':n, 'literal_user_paths':sorted(set(x.decode('utf-8',errors='replace') for x in hits))})
         if data[:4] not in MACH_MAGIC: continue
         kind = subprocess.check_output(['/usr/bin/file','-b',str(p)],text=True).strip()
-        if 'arm64' not in kind or 'x86_64' in kind: raise ValueError('不是单一arm64：' + n)
+        if arch not in kind or other in kind: raise ValueError(f'不是单一{arch}：' + n)
         load = subprocess.check_output(['/usr/bin/otool','-l',str(p)],text=True)
         deps = subprocess.check_output(['/usr/bin/otool','-L',str(p)],text=True).splitlines()[1:]
         rpaths = re.findall(r'cmd LC_RPATH\n\s*cmdsize \d+\n\s*path (.*?) \(offset',load)
@@ -91,10 +92,11 @@ def audit(app: Path):
         if not page.is_file() or hashlib.sha256(page.read_bytes()).hexdigest() != expected_hash:
             raise ValueError('网页资源缺失或与构建记录不符：' + name)
     return {'web_resources_verified':True, 'plist':info,'files':files,'links':links,'mach_o':mach,'user_path_literals':paths,
-            'architecture':'arm64','declared_minimum_system':info['LSMinimumSystemVersion'],
+            'architecture':arch,'declared_minimum_system':info['LSMinimumSystemVersion'],
             'no_external_runtime_load_dependencies':True}
 
 if __name__ == '__main__':
     import argparse
     parser=argparse.ArgumentParser(description=__doc__);parser.add_argument('app',type=Path)
-    args=parser.parse_args();print(json.dumps(audit(args.app),ensure_ascii=False,indent=2))
+    parser.add_argument('--arch',choices=('arm64','x86_64'),default='arm64')
+    args=parser.parse_args();print(json.dumps(audit(args.app,args.arch),ensure_ascii=False,indent=2))
