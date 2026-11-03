@@ -77,6 +77,8 @@ python -B scripts/prepare_windows_build.py --output-dir build/windows-env
 
 跨卷检查有单元测试验证拒绝发生在源打开前；原生真正双卷场景不伪称通过。后续须在明确授权的两个独立人工卷目录验证，不借用真实用户文件。
 
+Windows 组件与补充许可来源见 [THIRD_PARTY_WINDOWS.md](../packaging/THIRD_PARTY_WINDOWS.md)；原文哈希锁定并在打包时校验。
+
 ## 官方接口依据
 
 - [FILE_RENAME_INFORMATION](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)、[NtSetInformationFile](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/nf-ntifs-ntsetinformationfile)

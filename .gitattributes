@@ -1,0 +1,5 @@
+# Preserve hash-pinned upstream license bytes on every checkout.
+/packaging/licenses/windows-runtime/* -text
+/packaging/licenses/LICENSE.pythonnet.txt -text
+/packaging/licenses/LICENSE.clr-loader.txt -text
+/packaging/licenses/LICENSE.WebView2.md -text

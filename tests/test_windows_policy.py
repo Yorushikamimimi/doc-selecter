@@ -195,6 +195,16 @@ class WindowsFallbackTests(unittest.TestCase):
 
 
 class WindowsBuildPolicyTests(unittest.TestCase):
+    def test_supplemental_licenses_match_pinned_original_bytes(self):
+        import hashlib
+        lock = json.loads((REPO / 'packaging/runtime-windows-x86_64.json').read_text(encoding='utf-8'))
+        self.assertTrue(lock['license_files'])
+        for item in lock['license_files']:
+            path = REPO / item['path']
+            self.assertTrue(path.is_relative_to(REPO / 'packaging/licenses'))
+            self.assertFalse(path.is_symlink())
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), item['sha256'])
+
     def test_windows_source_whitelist_complete_and_no_state(self):
         import importlib.util
         spec = importlib.util.spec_from_file_location('windows_builder', REPO / 'scripts/build_windows_distributable.py')

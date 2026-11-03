@@ -11,7 +11,6 @@ import shutil
 import struct
 import subprocess
 import sys
-import tempfile
 import zipfile
 
 REPO = Path(__file__).resolve().parents[1]
@@ -99,9 +98,18 @@ def build(output, receipt):
         shutil.copyfile(source, target)
     licenses = stage / 'licenses'; licenses.mkdir()
     shutil.copyfile(REPO / 'LICENSE', licenses / 'LICENSE.doc-selecter.txt')
-    shutil.copyfile(Path(sys.base_prefix) / 'LICENSE.txt', licenses / 'LICENSE.Python-runtime.txt')
+    runtime_license = Path(sys.base_prefix) / 'LICENSE.txt'
+    if digest(runtime_license) != lock['runtime_license_sha256']:
+        raise RuntimeError('运行时许可与固定官方发行资产不一致。')
+    shutil.copyfile(runtime_license, licenses / 'LICENSE.Python-runtime.txt')
     tk_license = Path(sys.base_prefix) / 'tcl/tk8.6/license.terms'
     shutil.copyfile(tk_license, licenses / 'LICENSE.Tk.txt')
+    for item in lock['license_files']:
+        source = REPO / item['path']
+        if source.is_symlink() or digest(source) != item['sha256']:
+            raise RuntimeError('许可材料缺失或校验和不符。')
+        shutil.copyfile(source, licenses / source.name)
+    shutil.copyfile(REPO / 'packaging/THIRD_PARTY_WINDOWS.md', licenses / 'THIRD_PARTY_WINDOWS.md')
     for line in (REPO / 'packaging/requirements-windows-build.txt').read_text().splitlines():
         name = line.split('==')[0]
         dist = metadata.distribution(name)
@@ -130,8 +138,8 @@ def build(output, receipt):
     runtime_hooks=[{str(stage / 'packaging/windows_runtime.py')!r}],
     excludes=['tests', 'pip', 'setuptools', 'PyInstaller', 'pytest', 'webview.platforms.mshtml'], optimize=0)
 # pywebview ships loaders for multiple CPUs; this distribution is x64 only.
-a.binaries = [x for x in a.binaries if not any(v in x[0].replace('\\\\','/') for v in ('win-x86/', 'win-arm64/'))]
-a.datas = [x for x in a.datas if not any(v in x[0].replace('\\\\','/') for v in ('win-x86/', 'win-arm64/'))]
+a.binaries = [x for x in a.binaries if not any(v in x[0].replace('\\\\','/') for v in ('win-x86/', 'win-arm64/', 'WebBrowserInterop.x86.dll'))]
+a.datas = [x for x in a.datas if not any(v in x[0].replace('\\\\','/') for v in ('win-x86/', 'win-arm64/', 'WebBrowserInterop.x86.dll'))]
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name='FileOrganizer',
           console=False, debug=False, strip=False, upx=False, uac_admin=False)
