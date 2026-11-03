@@ -143,7 +143,8 @@ coll = COLLECT(exe, a.binaries, a.datas, strip=False, upx=False, name='FileOrgan
         '--distpath', str(output / 'dist'), '--workpath', str(output / 'work'), str(spec)],
         cwd=stage, env=env, check=True)
     folder = output / 'dist/FileOrganizer'
-    artificial = Path(tempfile.mkdtemp(prefix='docsel-frozen-')).resolve(strict=True)
+    from windows_sandbox import make_private_root
+    artificial = make_private_root('docsel-frozen-')
     env['DOCSELECTER_TEST_ROOT'] = str(artificial)
     env['TEMP'] = env['TMP'] = str(artificial)
     subprocess.run([str(folder / 'FileOrganizer.exe'), '--backend-self-test'],

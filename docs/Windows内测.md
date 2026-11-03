@@ -61,7 +61,7 @@ python -B scripts/prepare_windows_build.py --output-dir build/windows-env
 & build/windows-env/venv/Scripts/python.exe -B scripts/build_windows_distributable.py --output-dir build/windows-candidate --test-receipt build/windows-checks.json
 ```
 
-失败材料保留，重跑用新的目录／receipt 文件名。原始诊断保留在此次临时人工沙盒的 `records` 中，不提交或上传。构建记录中的 `source_sha256` 仅含源码，不是用户文件清单。
+失败材料保留，重跑用新的目录／receipt 文件名。测试入口通过 `scripts/windows_sandbox.py` 新建私有人工根，只有当前用户／SYSTEM／管理员可写，不修改已有目录或系统权限。原始诊断保留在此次临时人工沙盒的 `records` 中，不提交或上传。构建记录中的 `source_sha256` 仅含源码，不是用户文件清单。
 
 ## 验收清单
 
