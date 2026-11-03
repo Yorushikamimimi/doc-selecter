@@ -1,9 +1,15 @@
 """Local macOS App entry; CLI config and all file-operation contracts stay intact."""
 from __future__ import annotations
 
-import fcntl
+import sys
+if sys.platform == 'win32':
+    from .windows.locking import fcntl
+else:
+    import fcntl
 import json
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 from pathlib import Path
 import subprocess
 import sys
@@ -19,6 +25,12 @@ SUPPORT_FOLDER = '文件整理助手'
 
 def _directory(path: str, *, create: bool) -> None:
     """Open every raw component without following links; only create our directories."""
+    if os.name == 'nt':
+        from .windows.native import open_directory, require_private_directory
+        with open_directory(path, create=create) as directory:
+            if create:
+                require_private_directory(directory)
+        return
     if not os.path.isabs(path) or any(p in ('.', '..') for p in path.split('/')) or '\x00' in path:
         raise ConfigError('应用工作目录无效。')
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
@@ -39,6 +51,10 @@ def _directory(path: str, *, create: bool) -> None:
 
 def application_paths(home: str) -> tuple[str, str]:
     """Pure path construction; no user source such as Downloads is a startup default."""
+    if os.name == 'nt':
+        from .windows.app import local_app_data
+        support = os.path.join(local_app_data(), SUPPORT_FOLDER)
+        return os.path.join(support, '未选择来源'), os.path.join(support, 'state')
     support = os.path.join(home, 'Library', 'Application Support', SUPPORT_FOLDER)
     return os.path.join(support, '未选择来源'), os.path.join(support, 'state')
 
@@ -63,7 +79,7 @@ def load_app_settings(env=None, *, _home=None) -> Settings:
     # real source still goes through selected_settings's existing trusted gate.
     return Settings(downloads_dir=source, state_dir=state,
                     target_parent_name=DEFAULT_TARGET_PARENT_NAME,
-                    sandboxed=False, source='macOS App安全启动默认（来源尚未选择）')
+                    sandboxed=False, source=('Windows' if os.name == 'nt' else 'macOS') + ' App安全启动默认（来源尚未选择）')
 
 
 def diagnostic_path(env=None) -> str:
@@ -89,6 +105,10 @@ def _write_diagnostic(message: str, env=None) -> str | None:
 
 def _failure_notice(message: str, path: str | None) -> None:
     """Native failure notice, passed as arguments, never interpolated into code."""
+    if os.name == 'nt':
+        from .windows.app import notice
+        notice(message + ('\n诊断记录：' + path if path else ''))
+        return
     script = ('on run argv\n'
               'display alert "文件整理助手无法启动" message (item 1 of argv) '
               'as critical buttons {"好"} default button "好"\nend run')
@@ -104,6 +124,10 @@ class AppInstance:
     """Separate lifetime lock; never repurpose the core execution/undo lock."""
     def __init__(self, state: str):
         _directory(state, create=False)
+        if os.name == 'nt':
+            from .windows.native import open_directory, require_private_directory
+            with open_directory(state) as directory:
+                require_private_directory(directory)
         self.fd = os.open(os.path.join(state, 'app-instance.lock'),
                           os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600)
         try:
@@ -164,7 +188,11 @@ def app_main(argv=None) -> int:
                 except BlockingIOError:
                     print('已有文件整理助手窗口运行，未创建第二个窗口。', flush=True)
                     return 0
-                if not diagnose and '--tk' not in argv and os.environ.get('DOCSELECTER_UI') != 'tk':
+                use_web = not diagnose and '--tk' not in argv and os.environ.get('DOCSELECTER_UI') != 'tk'
+                if use_web and os.name == 'nt':
+                    from .windows.app import choose_webview
+                    use_web = choose_webview()
+                if use_web:
                     from .webui import run
                     run(settings)
                     return 0

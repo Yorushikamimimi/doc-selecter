@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import json
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 import stat
 import time
 import unicodedata
@@ -89,6 +91,9 @@ def build_plan(
     ``recursive=True`` 时只对 ``scope_dirs``（用户选中的目录）递归；默认仅顶层。
     目标路径为 ``目标根/<类别>/<原相对目录链>/<原文件名>``，**保留原层级**。
     """
+    if os.name == 'nt' and archive_emptied_dirs:
+        from .windows.paths import ARCHIVE_UNAVAILABLE
+        raise PlanError(ARCHIVE_UNAVAILABLE)
     selection = sorted_selection(CATEGORIES if category_selection is None else category_selection)
     # 目标根：解析链接之前先检查（链接根会把写入重定向到下载目录之外）
     reject_symlink_segments_between(
@@ -175,6 +180,9 @@ def build_plan(
         # 因此它属于「运行期绑定的上下文」，由 verify_plan_binding 校验）
         "dir_identities": capture_dir_identities(settings, operations),
     }
+    if os.name == 'nt':
+        from .windows.paths import PLATFORM_ID
+        plan['platform'] = PLATFORM_ID
     from .directory_archive import prepare_archive_plan
     try:
         prepare_archive_plan(settings, plan, scan, archive_emptied_dirs)
@@ -290,7 +298,7 @@ def _reject_new_move_links(settings: Settings, plan: dict[str, Any]) -> None:
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
     try:
         for path in paths:
-            fd = os.open("/", flags)
+            fd = os.open(path[:3] if os.name == 'nt' else "/", flags)
             try:
                 parts = path.split("/")[1:]
                 for index, part in enumerate(parts):
@@ -408,6 +416,11 @@ def load_verified_plan(
 ) -> dict[str, Any]:
     """读取计划、校验格式版本与指纹；``verify_binding=True`` 时绑定当前配置。"""
     plan = load_plan(settings, plan_id)
+    if os.name == 'nt':
+        from .windows.policy import check_plan
+        check_plan(plan)
+    elif 'platform' in plan:
+        raise PlanError('计划来自其他平台，不能在本机执行、撤销或恢复。')
     if for_new_move and plan.get("schema_version") != 4 and (plan.get("schema_version") != 3 or plan.get("rules_version") != RULES_VERSION):
         raise MoveAdmissionRefused("计划的筛查规则已过期，请重新生成预览并确认；历史撤销/恢复仍可使用。")
     assert_plan_format_supported(plan)

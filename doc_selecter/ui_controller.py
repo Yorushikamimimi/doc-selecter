@@ -10,6 +10,8 @@ import dataclasses
 import datetime
 import hashlib
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 import re
 import secrets
 import stat
@@ -298,6 +300,9 @@ class Controller:
             return self._start('scanning', self._preview)
 
     def settings_set(self, archive, auto_check):
+        if os.name == 'nt' and archive:
+            from .windows.paths import ARCHIVE_UNAVAILABLE
+            raise RequestRefused(ARCHIVE_UNAVAILABLE)
         with self._lock:
             self._require_idle(); self._require_source()
             if type(archive) is not bool or type(auto_check) is not bool:
@@ -563,6 +568,9 @@ class Controller:
         return self._start('checking', operation)
 
     def remaining_discover(self):
+        if os.name == 'nt':
+            from .windows.paths import ARCHIVE_UNAVAILABLE
+            raise RequestRefused(ARCHIVE_UNAVAILABLE)
         with self._lock:
             self._require_idle()
             self._remaining_revision += 1
@@ -849,5 +857,6 @@ class Controller:
                 'can_undo': not self.busy and self._undo_allowed(), 'undo_token': self._token(version),
                 'can_open': self._can_open and self.phase == 'done' and not self.busy,
                 'settings': {'archive': self.archive, 'auto_check': self.auto_check},
+                'capabilities': {'directory_archive': os.name != 'nt', 'remaining_archive': os.name != 'nt'},
                 'subfolders': {'enabled': self.include_subfolders, 'selected': self.scope, 'candidates': self.folders},
                 'remaining': self.remaining, 'discovery': self.discovery})

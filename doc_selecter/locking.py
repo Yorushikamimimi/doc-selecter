@@ -8,9 +8,15 @@
 
 from __future__ import annotations
 
-import fcntl
+import sys
+if sys.platform == 'win32':
+    from .windows.locking import fcntl
+else:
+    import fcntl
 import json
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -81,6 +87,10 @@ class GlobalLock:
 
     def acquire(self, *, kind: str, action: str, plan_id: str | None = None) -> LockHandle:
         os.makedirs(self.settings.state_dir, mode=0o700, exist_ok=True)
+        if os.name == 'nt':
+            from .windows.native import open_directory, require_private_directory
+            with open_directory(self.settings.state_dir) as directory:
+                require_private_directory(directory)
         fd = os.open(self.path, os.O_CREAT | os.O_RDWR | getattr(os, "O_NOFOLLOW", 0), 0o600)
         try:
             fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)

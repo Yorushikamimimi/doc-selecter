@@ -17,6 +17,8 @@ from __future__ import annotations
 
 import json
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 import unicodedata
 from dataclasses import dataclass, field
 from typing import Any
@@ -133,10 +135,16 @@ class Settings:
 
 
 def _norm_abs(path: str) -> str:
+    if os.name == 'nt':
+        from .windows.paths import absolute
+        return absolute(path)
     return os.path.normpath(os.path.abspath(os.path.expanduser(path)))
 
 
 def _under(child: str, parent: str) -> bool:
+    if os.name == 'nt':
+        from .windows.paths import under
+        return under(child, parent)
     child = os.path.normpath(child)
     parent = os.path.normpath(parent)
     return child == parent or child.startswith(parent + os.sep)
@@ -172,6 +180,12 @@ def _validate_target_parent_name(name: object) -> str:
     拒绝：空、``.``/``..``、任何路径分隔符（``/``、``\\``）、控制字符、
     以 ``.`` 开头（隐藏目录）、以及任何会逃出下载目录的形式。
     """
+    if os.name == 'nt':
+        from .windows.paths import component
+        try:
+            component(name)
+        except (ValueError, UnicodeError) as exc:
+            raise ConfigError(str(exc)) from exc
     if not isinstance(name, str) or not name:
         raise ConfigError("target_parent_name 必须是非空字符串")
     if name in (".", ".."):
@@ -325,6 +339,10 @@ def ensure_state_dirs(settings: Settings) -> None:
         settings.plan_state_dir,
     ):
         os.makedirs(path, mode=0o700, exist_ok=True)
+        if os.name == 'nt':
+            from .windows.native import open_directory, require_private_directory
+            with open_directory(path) as directory:
+                require_private_directory(directory)
 
 
 def assert_downloads_exists(settings: Settings) -> None:

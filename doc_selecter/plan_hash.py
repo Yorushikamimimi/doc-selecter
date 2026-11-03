@@ -27,6 +27,8 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 import secrets
 import time
 import unicodedata
@@ -285,6 +287,8 @@ def project_plan_body(plan: Mapping[str, Any], *, resolve_paths: bool = True) ->
     if "selected_scope" in plan:
         from .scanner import normalize_scope
         body["selected_scope"] = normalize_scope(plan["selected_scope"])
+    if 'platform' in plan:
+        body['platform'] = plan['platform']
     return body
 
 

@@ -15,6 +15,8 @@
 from __future__ import annotations
 
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 from dataclasses import dataclass, field
 
 from .atomic_move import FileIdentity
@@ -316,6 +318,12 @@ def scan_scope(
                 _exclude(result, rel_path=rel_path, code=EXCLUDED_SENSITIVE,
                          basis="疑似敏感项", sensitive=True)
                 continue
+            if os.name == 'nt':
+                from .windows.paths import unsupported_name
+                if unsupported_name(name):
+                    _exclude(result, rel_path=rel_path, code=EXCLUDED_SYMLINK,
+                             basis='Windows 不支持的名称或快捷方式：不解析、不移动')
+                    continue
             try:
                 st = entry.stat(follow_symlinks=False)
             except OSError as exc:
@@ -325,6 +333,11 @@ def scan_scope(
                 continue
 
             import stat as statmod
+
+            if os.name == 'nt' and st.st_file_attributes & (0x2 | 0x4 | 0x1000 | 0x40000 | 0x400000):
+                _exclude(result, rel_path=rel_path, code=EXCLUDED_HIDDEN,
+                         basis='Windows 隐藏、系统或云端项：不移动')
+                continue
 
             if statmod.S_ISLNK(st.st_mode):
                 _exclude(result, rel_path=rel_path, code=EXCLUDED_SYMLINK,
@@ -506,6 +519,15 @@ def list_selectable_folders(
             name = entry.name
             if is_sensitive_dir(name):
                 continue  # 名称检查先于任何类型/元数据检查
+            if os.name == 'nt':
+                from .windows.paths import unsupported_name
+                if unsupported_name(name):
+                    continue
+                try:
+                    if entry.stat(follow_symlinks=False).st_file_attributes & (0x2 | 0x4 | 0x400 | 0x1000 | 0x40000 | 0x400000):
+                        continue
+                except OSError:
+                    continue
             if entry.is_symlink() or not entry.is_dir(follow_symlinks=False):
                 continue
             if rel_dir == "" and name == target_parent_name:

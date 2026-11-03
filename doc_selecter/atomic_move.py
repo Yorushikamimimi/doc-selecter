@@ -16,6 +16,8 @@ import ctypes
 import ctypes.util
 import errno
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 import tempfile
 import stat
 from dataclasses import dataclass
@@ -437,3 +439,7 @@ def matches_identity(path: str, expected: dict[str, object]) -> bool:
     if actual.mode_type != "regular":
         return False
     return actual.matches(expected)
+
+
+if os.name == 'nt':
+    from .windows.move import WindowsAtomicMover as AtomicMover

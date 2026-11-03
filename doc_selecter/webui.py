@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import threading
@@ -100,6 +101,10 @@ def run(settings):
 
     def open_target():
         path = controller.target_to_open()
+        if os.name == 'nt':
+            from .windows.app import open_folder
+            open_folder(path)
+            return {'opened': True}
         subprocess.Popen(['/usr/bin/open', path], stdin=subprocess.DEVNULL,
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return {'opened': True}
@@ -119,5 +124,11 @@ def run(settings):
                 except RequestRefused:
                     pass
     # private_mode avoids persisting website data in a user's profile.
-    webview.start(background, private_mode=True, debug=False)
+    if os.name == 'nt':
+        from .windows.io import os as fs
+        cache = fs.path.join(settings.state_dir, 'webview-cache')
+        fs.makedirs(cache, exist_ok=True)
+        webview.start(background, gui='edgechromium', private_mode=True, debug=False, storage_path=cache)
+    else:
+        webview.start(background, private_mode=True, debug=False)
     stopped.set()

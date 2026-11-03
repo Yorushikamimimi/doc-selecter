@@ -1,0 +1,46 @@
+name: Windows preview (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Prepare pinned isolated runtime
+        shell: pwsh
+        run: |
+          python -B scripts/prepare_windows_build.py --output-dir build/windows-env
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Run native background checks (no windows)
+        shell: pwsh
+        run: |
+          & build/windows-env/venv/Scripts/python.exe -B scripts/test_windows_background.py --receipt build/windows-checks.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Build and inspect unsigned preview ZIP
+        shell: pwsh
+        run: |
+          & build/windows-env/venv/Scripts/python.exe -B scripts/build_windows_distributable.py --output-dir build/windows-candidate --test-receipt build/windows-checks.json
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Upload only candidate distribution and checksums
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: doc-selecter-windows-x86_64-unsigned-preview
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            build/windows-candidate/doc-selecter-*-windows-x86_64.zip
+            build/windows-candidate/SHA256SUMS
+            build/windows-candidate/build-manifest.json

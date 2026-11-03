@@ -1,6 +1,8 @@
 """GUI 主动选择来源的配置准入；不写用户配置、不改 CLI 配置契约。"""
 import copy
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 import stat
 import unicodedata
 
@@ -12,6 +14,9 @@ from .rules import is_sensitive_dir, is_package_dir, is_code_project_dir
 
 
 def selected_settings(base: Settings, path: str) -> Settings:
+    if os.name == 'nt':
+        from .windows.paths import absolute
+        path = absolute(path)
     if not isinstance(path, str) or not os.path.isabs(path) or '\x00' in path:
         raise ConfigError('请选择一个有效的绝对目录。')
     if any(p in {'.', '..'} for p in path.split('/')):
@@ -29,7 +34,7 @@ def selected_settings(base: Settings, path: str) -> Settings:
     check_dir_pair(source, base.state_dir)
     check_target_root_containment(source, target_name)
     # 名称筛查先于对应路径段的 metadata；系统 /private 锚点不是私人目录名。
-    current = os.sep
+    current = source[:3] if os.name == 'nt' else os.sep
     for part in source.split('/')[1:]:
         current = os.path.join(current, part)
         if current != '/private' and (is_sensitive_dir(part) or is_package_dir(part) or part.startswith('.')):
@@ -38,9 +43,9 @@ def selected_settings(base: Settings, path: str) -> Settings:
         if stat.S_ISLNK(st.st_mode) or not stat.S_ISDIR(st.st_mode):
             raise ConfigError('所选目录的路径含链接或非目录，拒绝使用。')
     flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
-    fd = os.open('/', flags)
-    current = os.sep
-    boundary = sandbox if base.sandboxed or injected else os.sep
+    fd = os.open(source[:3] if os.name == 'nt' else '/', flags)
+    current = source[:3] if os.name == 'nt' else os.sep
+    boundary = sandbox if base.sandboxed or injected else current
     try:
         for part in source.split('/')[1:]:
             child = os.open(part, flags, dir_fd=fd)

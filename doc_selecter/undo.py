@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import errno
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 from dataclasses import dataclass, field
 from typing import Any, Callable, Mapping
 
@@ -614,7 +616,11 @@ def _perform_restore(
                 verify_binding(settings,plan)
             except PlanError as exc:
                 raise DirectoryIdentityChanged(str(exc)) from exc
-        AtomicMover().rename_excl_at(dest_fd, os.path.basename(dest), src_fd, os.path.basename(source))
+        if os.name == 'nt':
+            AtomicMover().rename_excl_at(dest_fd, os.path.basename(dest), src_fd,
+                                       os.path.basename(source), expected=expected)
+        else:
+            AtomicMover().rename_excl_at(dest_fd, os.path.basename(dest), src_fd, os.path.basename(source))
     except DestinationExists as exc:
         journal.append(
             make_event(

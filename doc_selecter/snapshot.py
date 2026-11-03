@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import json
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 import time
 from typing import Any, Mapping
 

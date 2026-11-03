@@ -11,6 +11,8 @@
 from __future__ import annotations
 
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 import copy
 import queue
 import threading
@@ -867,7 +869,11 @@ class App:
         if self._closing or self._operation_busy or not self._target_can_open():
             return
         try:
-            subprocess.Popen(["/usr/bin/open", self.settings.target_root])
+            if os.name == 'nt':
+                from .windows.app import open_folder
+                open_folder(self.settings.target_root)
+            else:
+                subprocess.Popen(["/usr/bin/open", self.settings.target_root])
         except OSError as exc:
             messagebox.showerror(WINDOW_TITLE, self._public(exc))
 
@@ -998,6 +1004,9 @@ class App:
             return False
 
     def on_toggle_archive(self) -> None:
+        if os.name == 'nt':
+            self.archive_var.set(False)
+            return
         if self._operation_busy:
             self.archive_var.set((self.plan or {}).get("archive", {}).get("enabled", False))
             return
@@ -1230,7 +1239,10 @@ class App:
                       or head.uncertain)
             self.undo_button.configure(state='disabled' if unsafe else 'normal')
         self.preview_button.configure(state='normal' if self._source_selected else 'disabled')
-        self.remaining_button.configure(state='normal' if self._source_selected else 'disabled')
+        self.remaining_button.configure(state='normal' if self._source_selected and os.name != 'nt' else 'disabled')
+        if os.name == 'nt':
+            self.archive_check.configure(state='disabled')
+            self.archive_label.configure(text='Windows 内测版暂不支持目录归档。')
         self.watch_now_button.configure(state='normal' if self._source_selected else 'disabled')
         self.watch_check.configure(state='normal' if self._source_selected else 'disabled')
         if not self._source_selected:
@@ -1251,6 +1263,8 @@ class App:
         self._sync_daily_view(history, current_plan)
 
     def on_remaining_archive(self) -> None:
+        if os.name == 'nt':
+            return
         if self._closing or self._operation_busy or not self._source_selected:
             return
         from .gui_remaining import RemainingArchiveDialog

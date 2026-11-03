@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import errno
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -317,6 +319,8 @@ def _classify_failure(exc: Exception) -> tuple[str, str, str]:
 def _classify_errno(err) -> tuple[str, str, str]:
     if err == errno.EXDEV:
         return "skipped", "CROSS_FILESYSTEM", "local"
+    if os.name == 'nt' and err == errno.EBUSY:
+        return "skipped", "FILE_BUSY", "local"
     if err in (errno.EACCES, errno.EPERM):
         return "failed", "PERMISSION_DENIED", "local"
     if err in (errno.ENOSPC, errno.EDQUOT):
@@ -507,7 +511,10 @@ def _execute_locked(
                 except PlanError as exc:
                     raise DirectoryIdentityChanged(str(exc)) from exc
             mover = AtomicMover()
-            mover.rename_excl_at(src_fd, source_name, dst_fd, dest_name)
+            if os.name == 'nt':
+                mover.rename_excl_at(src_fd, source_name, dst_fd, dest_name, expected=operation['identity'])
+            else:
+                mover.rename_excl_at(src_fd, source_name, dst_fd, dest_name)
         except Exception as exc:  # noqa: BLE001 - 分类映射见 _classify_failure
             outcome, reason_code, scope = _classify_failure(exc)
             if plan.get('schema_version') == 4 and reason_code == 'PERMISSION_DENIED':

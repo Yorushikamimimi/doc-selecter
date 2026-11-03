@@ -7,6 +7,8 @@ from __future__ import annotations
 import errno
 import hashlib
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 import re
 import stat
 import unicodedata
@@ -51,7 +53,7 @@ def directory_matches(path, expected):
 
 def open_checked(path, expected=None):
     """Open each raw component without following links, then compare final fd."""
-    fd = os.open('/', FLAGS)
+    fd = os.open(path[:3] if os.name == 'nt' else '/', FLAGS)
     try:
         for part in path.split('/')[1:]:
             new_fd = os.open(part, FLAGS, dir_fd=fd)
@@ -155,6 +157,9 @@ def layout_operations(plan):
 
 
 def validate_structure(settings, plan):
+    if os.name == 'nt':
+        from .windows.policy import check_plan
+        check_plan(plan)
     if plan.get('schema_version') == 4:
         from .remaining_archive import validate_structure as remaining_structure
         return remaining_structure(settings, plan)
@@ -477,7 +482,10 @@ def ensure_layout(settings,plan,hook=None):
             try:
                 if hook: hook('after_layout',op)
                 if identity(op['dest']) != current: _error('容器创建后身份变化，未绑定当前观测')
-                os.fsync(child);os.fsync(fd)
+                if os.name != 'nt':
+                    os.fsync(child);os.fsync(fd)
+                # Windows layout creation is journaled and identity-checked,
+                # but has no directory-fsync claim (including power loss).
             finally: os.close(child)
             journal.append(make_event('result',key,outcome='created',dest_identity=current,reason_code='OK'))
             runtime[op['dest']]=current

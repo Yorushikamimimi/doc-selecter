@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import os
+if os.name == 'nt':
+    from .windows.io import os, open
 import re
 import stat
 import time
@@ -64,6 +66,9 @@ class Discovery:
 
 
 def discover_remaining(settings, *, scope_dirs=None, recursive=False):
+    if os.name == 'nt':
+        from .windows.paths import ARCHIVE_UNAVAILABLE
+        refuse(ARCHIVE_UNAVAILABLE)
     """No-follow enumeration. Unselected trees are never walked for their files."""
     if type(recursive) is not bool:
         refuse('递归开关非法')
