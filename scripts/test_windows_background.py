@@ -37,7 +37,10 @@ def main(receipt):
     if os.name != 'nt':
         raise RuntimeError('此入口必须在 Windows 运行；不能将 macOS 结果冒充原生验证。')
     os.chdir(REPO)
-    root = Path(tempfile.mkdtemp(prefix='docsel-windows-'))
+    # Windows TEMP may contain an 8.3 alias (RUNNER~1). Resolve only our freshly
+    # created artificial directory, before injecting it; application paths still
+    # reject aliases and reparse points in native.open_directory.
+    root = Path(tempfile.mkdtemp(prefix='docsel-windows-')).resolve(strict=True)
     (root / 'tmp').mkdir(); (root / 'records').mkdir()
     os.environ.update(DOCSELECTER_TEST_ROOT=str(root), TEMP=str(root / 'tmp'), TMP=str(root / 'tmp'),
                       PYTHONDONTWRITEBYTECODE='1')

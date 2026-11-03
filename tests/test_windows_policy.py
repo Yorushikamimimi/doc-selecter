@@ -71,7 +71,7 @@ class WindowsPathPolicyTests(unittest.TestCase):
                 check_plan(plan)
 
     def test_plan_platform_is_hash_bound(self):
-        plan = json.loads((REPO / 'tests/fixtures/step1_v2_plan.json').read_text().replace(
+        plan = json.loads((REPO / 'tests/fixtures/step1_v2_plan.json').read_text(encoding='utf-8').replace(
             '<SOURCE>', 'C:/artificial' if os.name == 'nt' else '/artificial'))
         # Use the stored projection; no metadata queries against fixture paths.
         before = compute_plan_hash(plan, resolve_paths=False)
@@ -176,7 +176,7 @@ class WindowsBuildPolicyTests(unittest.TestCase):
         self.assertFalse(any('tests/' in p or 'config.json' in p or p.startswith('build/') for p in builder.SOURCES))
 
     def test_manual_workflow_has_no_publish_permission(self):
-        workflow = (REPO / '.github/workflows/windows-preview.yml').read_text()
+        workflow = (REPO / '.github/workflows/windows-preview.yml').read_text(encoding='utf-8')
         self.assertIn('workflow_dispatch:', workflow)
         self.assertIn('contents: read', workflow)
         self.assertNotIn('contents: write', workflow)
