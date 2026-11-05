@@ -1,11 +1,11 @@
 # 当前进度
 
-更新日期：2026-11-03。
+更新日期：2026-11-05（本轮仅标明 v0.1.0 历史记录，未改发布或重验）。
 
 ## 当前状态：v0.2.0 公开预览版已发布（2026-11-03，tag 指向 166872a）：网页界面、长期操作记录、分类细化与三个提示
 
-- **下载**：[v0.1.0 Release](https://github.com/Yorushikamimimi/doc-selecter/releases/tag/v0.1.0)，提供arm64 DMG、SHA256SUMS、构建清单与说明。App自带CPython3.12.15／Tcl与Tk9.0.4，不需另装Python。未替换原已安装App；新的分发成品尚待本人体验，不能写为Tian验收通过。
-- **版本**：实现提交 `472551b29690f4f3d9d93b89dad296e95f163845` 已推送main，注释tag v0.1.0精确指向该提交，GitHub标记prerelease、非draft。README下载入口和本条发布记录随文档另行提交；实际最新HEAD以Git为准。公开维护仅在doc-selecter，不同步扩展旧private项目。
+- **历史下载（v0.1.0；当前下载见 README）**：[v0.1.0 Release](https://github.com/Yorushikamimimi/doc-selecter/releases/tag/v0.1.0)，提供arm64 DMG、SHA256SUMS、构建清单与说明。App自带CPython3.12.15／Tcl与Tk9.0.4，不需另装Python。未替换原已安装App；新的分发成品尚待本人体验，不能写为Tian验收通过。
+- **历史版本（v0.1.0）**：实现提交 `472551b29690f4f3d9d93b89dad296e95f163845` 已推送main，注释tag v0.1.0精确指向该提交，GitHub标记prerelease、非draft。README下载入口和本条发布记录随文档另行提交；实际最新HEAD以Git为准。公开维护仅在doc-selecter，不同步扩展旧private项目。
 - **独立验证**：主控最终后台449项failure/error/skip=0，总642 ID、193 GUI未运行；原625 ID、旧断言和37份兼容夹具保留。22当前模块与两入口直接核对实际冻结字节码，148模块与验证副本等价。5 Mach-O arm64、12内部链接、许可／签名／清单hash正常；无外部Python依赖的未插桩启动、搬迁、LaunchServices、DMG挂载复制启动通过。
 - **往返与生命周期**：独立本地钩子冻结副本三人工文件双取消、移动／撤销、原名位置／五身份／字节、日志healthy及计划／确认不可变通过。1.5秒I/O期间约208.6ms关闭、心跳21.1ms、后台自然结束。不是用户原生点击证明。未访问真实Downloads／状态／备份或操作用户安装App／窗口。
 - **发布核对**：Release四附件从GitHub重新下载，与本地主控验证最终材料逐字一致；SHA256SUMS及GitHub各附件digest匹配。DMG SHA256为cecc6256ddbbebf19cc1e1511bf79e5081e8f36858c082413ca569e849b3ffa4。最终材料在忽略目录build/release.noindex/preview-0.1.0-release-text-144f；原始主控证据本地保留，不随公开附件上传。
